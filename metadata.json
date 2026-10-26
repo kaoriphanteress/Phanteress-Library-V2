@@ -1,0 +1,6 @@
+{
+  "name": "Phanteress Library",
+  "description": "Black and pink themed movie & TV show tracker with trending releases, personalized watchlists, episode tracking, and Google authentication.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

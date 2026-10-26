@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "Showty Tracker",
+  "short_name": "Showty",
+  "description": "Showly-inspired movie and TV show progress tracker with Black & Pink theme.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#060609",
+  "theme_color": "#060609",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

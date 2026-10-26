@@ -1,0 +1,69 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "email"]
+    },
+    "WatchlistItem": {
+      "title": "WatchlistItem",
+      "description": "Movie or TV show entry in user library",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "tmdbId": { "type": "string" },
+        "mediaType": { "type": "string" },
+        "title": { "type": "string" },
+        "posterPath": { "type": "string" },
+        "backdropPath": { "type": "string" },
+        "releaseDate": { "type": "string" },
+        "voteAverage": { "type": "number" },
+        "status": { "type": "string" },
+        "userRating": { "type": "number" },
+        "favorite": { "type": "boolean" },
+        "addedAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "tmdbId", "mediaType", "title", "status"]
+    },
+    "EpisodeProgress": {
+      "title": "EpisodeProgress",
+      "description": "User tracking for watched episodes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "showId": { "type": "string" },
+        "seasonNumber": { "type": "number" },
+        "episodeNumber": { "type": "number" },
+        "watched": { "type": "boolean" },
+        "watchedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "showId", "seasonNumber", "episodeNumber", "watched"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile document"
+    },
+    "/users/{userId}/watchlist/{itemId}": {
+      "schema": "WatchlistItem",
+      "description": "User saved watchlist and watched items"
+    },
+    "/users/{userId}/episodes/{episodeId}": {
+      "schema": "EpisodeProgress",
+      "description": "User episode progress tracking"
+    }
+  }
+}
