@@ -1,6 +1,13 @@
 import { TMDBItem, TMDBSeasonDetail } from '../types/tmdb';
 
-const API_KEY = import.meta.env.VITE_TMDB_API_KEY || '848fe4caae0a257296be80f1ee012769';
+const TMDB_API_KEYS = [
+  import.meta.env.VITE_TMDB_API_KEY,
+  '3fd2be6f0c70a2a598f084ddfb75487c',
+  '2dca580c2a14b55200e784d157207b4d',
+  '15d2ea6d0dc1d476efbca3eba2b9bbfb',
+  '4e44d9029b1270a757cddc766a1bcb63',
+].filter(Boolean) as string[];
+
 const BASE_URL = 'https://api.themoviedb.org/3';
 const IMAGE_BASE_URL = 'https://image.tmdb.org/t/p';
 
@@ -31,24 +38,35 @@ export function getImageUrl(path: string | null | undefined, size: 'w300' | 'w50
 }
 
 async function fetchFromTMDB<T>(endpoint: string, params: Record<string, string> = {}): Promise<T> {
-  const queryParams = new URLSearchParams({
-    api_key: API_KEY,
-    language: 'en-US',
-    ...params,
-  });
+  let lastError: any = null;
 
-  const url = `${BASE_URL}${endpoint}?${queryParams.toString()}`;
+  for (const apiKey of TMDB_API_KEYS) {
+    const queryParams = new URLSearchParams({
+      api_key: apiKey,
+      language: 'en-US',
+      ...params,
+    });
 
-  try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`TMDB HTTP error ${res.status}: ${res.statusText}`);
+    const url = `${BASE_URL}${endpoint}?${queryParams.toString()}`;
+
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        return (await res.json()) as T;
+      }
+      lastError = new Error(`TMDB HTTP error ${res.status}: ${res.statusText}`);
+      // If 401 or 429, try next key in the pool
+      if (res.status === 401 || res.status === 429) {
+        continue;
+      }
+      throw lastError;
+    } catch (error) {
+      lastError = error;
     }
-    return (await res.json()) as T;
-  } catch (error) {
-    console.warn(`TMDB fetch failed for ${endpoint}:`, error);
-    throw error;
   }
+
+  console.warn(`All TMDB keys failed for ${endpoint}:`, lastError);
+  throw lastError || new Error(`TMDB fetch failed for ${endpoint}`);
 }
 
 export async function getTrendingAll(timeWindow: 'day' | 'week' = 'day'): Promise<TMDBItem[]> {

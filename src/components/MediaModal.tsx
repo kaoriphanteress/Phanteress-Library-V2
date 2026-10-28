@@ -60,6 +60,31 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
   const [manageListOpen, setManageListOpen] = useState(false);
   const [newListNameInModal, setNewListNameInModal] = useState('');
 
+  // Sync with Marvel Order watched items
+  const [orderWatchedIds, setOrderWatchedIds] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('phanteress_marvel_watched_v1');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    const handleOrderSync = () => {
+      try {
+        const stored = localStorage.getItem('phanteress_marvel_watched_v1');
+        setOrderWatchedIds(stored ? JSON.parse(stored) : []);
+      } catch {}
+    };
+    window.addEventListener('phanteress_marvel_order_changed', handleOrderSync);
+    window.addEventListener('storage', handleOrderSync);
+    return () => {
+      window.removeEventListener('phanteress_marvel_order_changed', handleOrderSync);
+      window.removeEventListener('storage', handleOrderSync);
+    };
+  }, []);
+
   // Fetch full details whenever item changes
   useEffect(() => {
     if (!item) {
@@ -128,11 +153,27 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
     setReviewText(libItem?.review || '');
   }, [item, library]);
 
-  if (!item) return null;
-
   const currentData = details || item;
-  const title = currentData.title || currentData.name || 'Untitled';
-  const mediaType = currentData.media_type || (currentData.title ? 'movie' : 'tv');
+  const title = currentData?.title || currentData?.name || 'Untitled';
+  const mediaType = currentData?.media_type || (currentData?.title ? 'movie' : 'tv');
+
+  const isMarvelWatched = useMemo(() => {
+    if (!orderWatchedIds.length || !item) return false;
+    const cleanCurrentTitle = title.toLowerCase().trim();
+    return orderWatchedIds.some((id) => {
+      const cleanId = id.replace(/_/g, ' ').replace(/-/g, ' ').toLowerCase().trim();
+      return (
+        cleanId === cleanCurrentTitle ||
+        cleanCurrentTitle.includes(cleanId) ||
+        cleanId.includes(cleanCurrentTitle) ||
+        (currentData?.id && id.includes(currentData.id.toString()))
+      );
+    });
+  }, [orderWatchedIds, title, item, currentData?.id]);
+
+  // Early return only after ALL hooks have been registered
+  if (!item || !currentData) return null;
+
   const releaseDate = currentData.release_date || currentData.first_air_date || '';
   const year = releaseDate ? releaseDate.substring(0, 4) : '';
   const rating = currentData.vote_average ? currentData.vote_average.toFixed(1) : '—';
@@ -148,45 +189,6 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
   const currentStatus = libItem?.status;
   const isFavorite = !!libItem?.favorite;
   const userRating = libItem?.userRating || 0;
-
-  // Sync with Marvel Order watched items
-  const [orderWatchedIds, setOrderWatchedIds] = useState<string[]>(() => {
-    try {
-      const stored = localStorage.getItem('phanteress_marvel_watched_v1');
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  useEffect(() => {
-    const handleOrderSync = () => {
-      try {
-        const stored = localStorage.getItem('phanteress_marvel_watched_v1');
-        setOrderWatchedIds(stored ? JSON.parse(stored) : []);
-      } catch {}
-    };
-    window.addEventListener('phanteress_marvel_order_changed', handleOrderSync);
-    window.addEventListener('storage', handleOrderSync);
-    return () => {
-      window.removeEventListener('phanteress_marvel_order_changed', handleOrderSync);
-      window.removeEventListener('storage', handleOrderSync);
-    };
-  }, []);
-
-  const isMarvelWatched = useMemo(() => {
-    if (!orderWatchedIds.length) return false;
-    const cleanCurrentTitle = title.toLowerCase().trim();
-    return orderWatchedIds.some((id) => {
-      const cleanId = id.replace(/_/g, ' ').replace(/-/g, ' ').toLowerCase().trim();
-      return (
-        cleanId === cleanCurrentTitle ||
-        cleanCurrentTitle.includes(cleanId) ||
-        cleanId.includes(cleanCurrentTitle) ||
-        (currentData.id && id.includes(currentData.id.toString()))
-      );
-    });
-  }, [orderWatchedIds, title, currentData.id]);
 
   // Unified watched state
   const isCurrentlyWatched = currentStatus === 'watched' || isMarvelWatched;
