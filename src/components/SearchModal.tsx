@@ -102,9 +102,14 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onSel
         {/* Results List */}
         <div className="flex-1 overflow-y-auto p-2 space-y-1 no-scrollbar">
           {query.trim() === '' ? (
-            <div className="py-12 text-center text-zinc-500 text-xs">
-              <Film className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
-              <span>Search across millions of movies and TV shows</span>
+            <div className="py-12 text-center text-zinc-500 text-xs flex flex-col items-center">
+              <img
+                src="/logo.png"
+                alt="Phanteress"
+                className="w-12 h-12 rounded-2xl object-cover mb-3 shadow-[0_0_20px_rgba(255,42,133,0.3)] border border-[#ff2a85]/40 opacity-90"
+              />
+              <span className="text-zinc-400 font-medium">Search across millions of movies and TV shows</span>
+              <span className="text-zinc-600 text-[11px] mt-1">Phanteress Library</span>
             </div>
           ) : results.length === 0 && !loading ? (
             <div className="py-12 text-center text-zinc-500 text-xs">

@@ -131,7 +131,14 @@ function ShowtyDashboard() {
           if (movies[i]) combined.push(movies[i]);
           if (tv[i]) combined.push(tv[i]);
         }
-        setGenreResults(combined);
+        const seen = new Set<string>();
+        const unique = combined.filter((item) => {
+          const k = `${item.media_type || (item.title ? "movie" : "tv")}_${item.id}`;
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+        setGenreResults(unique);
         setGenreLoading(false);
       });
     }
@@ -151,11 +158,14 @@ function ShowtyDashboard() {
         Showly Rule: Top search capsule ONLY shows on Discover tab!
         No top bar on Progress, Order, Collection, or Stats!
       */}
+      {/* Discover floating search bar over hero backdrop */}
       {activeTab === 'discover' && (
-        <DiscoverSearchBar
-          onOpenSearch={() => setSearchOpen(true)}
-          onOpenSettings={() => setSettingsOpen(true)}
-        />
+        <div className="absolute top-0 left-0 right-0 z-30 pointer-events-auto pt-3 pb-6 bg-gradient-to-b from-[#060609]/95 via-[#060609]/50 to-transparent">
+          <DiscoverSearchBar
+            onOpenSearch={() => setSearchOpen(true)}
+            onOpenSettings={() => setSettingsOpen(true)}
+          />
+        </div>
       )}
 
       {/* Main Content Area */}
@@ -166,11 +176,17 @@ function ShowtyDashboard() {
             onSelect={(item) => setSelectedItem(item)}
             onExplore={() => setActiveTab('discover')}
             onOpenSearch={() => setSearchOpen(true)}
+            onNavigateToOrder={() => setActiveTab('order')}
           />
         )}
 
-        {/* ================= 2. ORDER TAB (Staged Canvas) ================= */}
-        {activeTab === 'order' && <OrderView />}
+        {/* ================= 2. ORDER TAB ================= */}
+        {activeTab === 'order' && (
+          <OrderView
+            onSelectTMDBItem={(item) => setSelectedItem(item)}
+            onNavigateToProgress={() => setActiveTab('progress')}
+          />
+        )}
 
         {/* ================= 3. DISCOVER TAB ================= */}
         {activeTab === 'discover' && (
@@ -272,9 +288,9 @@ function ShowtyDashboard() {
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                      {genreResults.map((item) => (
+                      {genreResults.map((item, idx) => (
                         <MediaCard
-                          key={`${item.media_type || 'm'}_${item.id}`}
+                          key={`genre_${item.media_type || 'm'}_${item.id}_${idx}`}
                           item={item}
                           onSelect={(i) => setSelectedItem(i)}
                         />

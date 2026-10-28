@@ -22,6 +22,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ items, onSelect, onPlayT
   const year = rawDate ? rawDate.substring(0, 4) : '';
   const mediaType = currentItem.media_type || (currentItem.title ? 'movie' : 'tv');
   const rating = currentItem.vote_average ? currentItem.vote_average.toFixed(1) : '7.9';
+
   const backdropUrl =
     getImageUrl(currentItem.backdrop_path, 'original') ||
     getImageUrl(currentItem.poster_path, 'w1280');
@@ -48,26 +49,28 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ items, onSelect, onPlayT
   };
 
   return (
-    <div className="relative w-full h-[480px] sm:h-[540px] bg-zinc-950 overflow-hidden border-b border-zinc-900">
-      {/* Background Backdrop */}
+    <div className="relative w-full h-[470px] sm:h-[530px] md:h-[580px] bg-zinc-950 overflow-hidden border-b border-zinc-900">
+      {/* Background Backdrop - Expands all the way to top behind search button */}
       {backdropUrl ? (
         <img
           src={backdropUrl}
           alt={title}
           referrerPolicy="no-referrer"
-          className="absolute inset-0 w-full h-full object-cover object-top opacity-35 transition-all duration-700 scale-100"
+          className="absolute inset-0 w-full h-full object-cover object-top opacity-50 sm:opacity-60 transition-all duration-700 scale-100"
         />
       ) : (
         <div className="absolute inset-0 bg-gradient-to-tr from-zinc-950 via-[#180a15] to-zinc-950 opacity-90" />
       )}
 
-      {/* Scrims */}
-      <div className="absolute inset-0 bg-gradient-to-t from-[#060609] via-[#060609]/70 to-transparent" />
-      <div className="absolute inset-0 bg-gradient-to-r from-[#060609] via-[#060609]/60 to-transparent" />
+      {/* Scrims: Top shadow for search bar legibility, bottom shadow for content transition */}
+      <div className="absolute inset-0 bg-gradient-to-b from-[#060609]/90 via-transparent to-[#060609]" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[#060609] via-[#060609]/75 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-r from-[#060609]/95 via-[#060609]/50 to-transparent" />
 
-      {/* Top Carousel Navigation Control (Cleanly separated from bottom buttons - fixes Screenshot 3 bug) */}
-      <div className="absolute top-4 right-4 z-20 flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-1 rounded-full border border-zinc-800">
+      {/* Carousel Navigation Control - Positioned below floating search capsule */}
+      <div className="absolute top-20 right-4 sm:right-6 z-20 flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-1 rounded-full border border-zinc-800 shadow-md">
         <button
+          type="button"
           onClick={prevSlide}
           className="p-1 rounded-full text-zinc-400 hover:text-white cursor-pointer"
           title="Previous slide"
@@ -78,6 +81,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ items, onSelect, onPlayT
           {items.slice(0, 5).map((_, idx) => (
             <button
               key={idx}
+              type="button"
               onClick={() => setCurrentIndex(idx)}
               className={`h-1.5 rounded-full transition-all cursor-pointer ${
                 currentIndex === idx
@@ -88,6 +92,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ items, onSelect, onPlayT
           ))}
         </div>
         <button
+          type="button"
           onClick={nextSlide}
           className="p-1 rounded-full text-zinc-400 hover:text-white cursor-pointer"
           title="Next slide"
@@ -97,7 +102,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ items, onSelect, onPlayT
       </div>
 
       {/* Main Content Info */}
-      <div className="relative max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8 flex flex-col justify-end pb-8 sm:pb-10 z-10">
+      <div className="relative max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8 flex flex-col justify-end pb-6 sm:pb-9 z-10">
         <div className="max-w-2xl">
           {/* Metadata Row */}
           <div className="flex items-center gap-2 text-xs text-zinc-400 mb-2">
@@ -114,28 +119,30 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ items, onSelect, onPlayT
           </div>
 
           {/* Headline Title */}
-          <h2 className="text-2xl sm:text-4xl md:text-5xl font-extrabold text-white tracking-tight leading-tight mb-2.5 [text-wrap:balance]">
+          <h2 className="text-2xl sm:text-4xl md:text-5xl font-extrabold text-white tracking-tight leading-tight mb-2 [text-wrap:balance]">
             {title}
           </h2>
 
           {/* Synopsis */}
-          <p className="text-xs sm:text-sm text-zinc-300 line-clamp-2 sm:line-clamp-3 mb-5 max-w-xl leading-relaxed">
+          <p className="text-xs sm:text-sm text-zinc-300 line-clamp-2 mb-4 max-w-xl leading-relaxed">
             {currentItem.overview || 'Track episodes, watch trailers, and manage your watchlist with real-time cloud sync.'}
           </p>
 
-          {/* Clean Action Buttons (No Overlaps on Mobile) */}
+          {/* Clean Action Buttons */}
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <button
+              type="button"
               onClick={() => onPlayTrailer(currentItem)}
-              className="flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#ff2a85] to-[#f43f5e] hover:from-[#ff3a95] hover:to-[#f54f6e] text-white text-xs sm:text-sm font-semibold shadow-[0_0_20px_rgba(255,42,133,0.4)] transition-all cursor-pointer whitespace-nowrap shrink-0 hover:scale-[1.02]"
+              className="flex items-center gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-[#ff2a85] to-[#f43f5e] hover:from-[#ff3a95] hover:to-[#f54f6e] text-white text-xs sm:text-sm font-semibold shadow-[0_0_20px_rgba(255,42,133,0.4)] transition-all cursor-pointer whitespace-nowrap shrink-0 hover:scale-[1.02]"
             >
               <Play className="w-4 h-4 fill-white" />
               <span>Watch Trailer</span>
             </button>
 
             <button
+              type="button"
               onClick={handleWatchlistToggle}
-              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl border text-xs sm:text-sm font-medium transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl border text-xs sm:text-sm font-medium transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 isInLibrary
                   ? 'bg-zinc-900 border-[#ff2a85] text-white shadow-[0_0_12px_rgba(255,42,133,0.3)]'
                   : 'bg-zinc-900/80 hover:bg-zinc-800 border-zinc-800 hover:border-zinc-700 text-zinc-200'
@@ -155,8 +162,9 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ items, onSelect, onPlayT
             </button>
 
             <button
+              type="button"
               onClick={() => onSelect(currentItem)}
-              className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2.5 rounded-xl bg-zinc-900/70 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white text-xs sm:text-sm font-medium transition-all cursor-pointer whitespace-nowrap shrink-0"
+              className="flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-zinc-900/70 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white text-xs sm:text-sm font-medium transition-all cursor-pointer whitespace-nowrap shrink-0"
             >
               <Info className="w-4 h-4" />
               <span>Details</span>

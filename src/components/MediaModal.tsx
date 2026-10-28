@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   X,
   Star,
@@ -31,6 +31,7 @@ interface MediaModalProps {
 export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectRelated }) => {
   const {
     library,
+    episodes,
     customLists,
     createCustomList,
     toggleItemInCustomList,
@@ -139,12 +140,159 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
   const posterUrl = getImageUrl(currentData.poster_path, 'w500');
 
   const libItem = library.find(
-    (l) => l.tmdbId === currentData.id && (l.mediaType === mediaType || !l.mediaType)
+    (l) =>
+      (l.tmdbId === currentData.id || (l.title && l.title.toLowerCase().trim() === title.toLowerCase().trim())) &&
+      (l.mediaType === mediaType || !l.mediaType || mediaType === "movie" || mediaType === "tv")
   );
 
   const currentStatus = libItem?.status;
   const isFavorite = !!libItem?.favorite;
   const userRating = libItem?.userRating || 0;
+
+  // Sync with Marvel Order watched items
+  const [orderWatchedIds, setOrderWatchedIds] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('phanteress_marvel_watched_v1');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    const handleOrderSync = () => {
+      try {
+        const stored = localStorage.getItem('phanteress_marvel_watched_v1');
+        setOrderWatchedIds(stored ? JSON.parse(stored) : []);
+      } catch {}
+    };
+    window.addEventListener('phanteress_marvel_order_changed', handleOrderSync);
+    window.addEventListener('storage', handleOrderSync);
+    return () => {
+      window.removeEventListener('phanteress_marvel_order_changed', handleOrderSync);
+      window.removeEventListener('storage', handleOrderSync);
+    };
+  }, []);
+
+  const isMarvelWatched = useMemo(() => {
+    if (!orderWatchedIds.length) return false;
+    const cleanCurrentTitle = title.toLowerCase().trim();
+    return orderWatchedIds.some((id) => {
+      const cleanId = id.replace(/_/g, ' ').replace(/-/g, ' ').toLowerCase().trim();
+      return (
+        cleanId === cleanCurrentTitle ||
+        cleanCurrentTitle.includes(cleanId) ||
+        cleanId.includes(cleanCurrentTitle) ||
+        (currentData.id && id.includes(currentData.id.toString()))
+      );
+    });
+  }, [orderWatchedIds, title, currentData.id]);
+
+  // Unified watched state
+  const isCurrentlyWatched = currentStatus === 'watched' || isMarvelWatched;
+
+  // Toggle Watched on / off reliably
+  const handleToggleWatched = async () => {
+    const isFuture = currentData.release_date && new Date(currentData.release_date).getTime() > Date.now();
+    if (isFuture) {
+      alert(`"${title}" has not been released yet.`);
+      return;
+    }
+
+    if (isCurrentlyWatched) {
+      // 1. UNWATCH: revert to watchlist (unwatched)
+      if (libItem) {
+        await updateStatus(libItem.id, 'watchlist');
+      }
+
+      // Also ensure any matching library entries by id or title are un-watched
+      const matches = library.filter(
+        (l) =>
+          (l.tmdbId === currentData.id || (l.title && l.title.toLowerCase().trim() === title.toLowerCase().trim())) &&
+          l.status === 'watched'
+      );
+      for (const m of matches) {
+        await updateStatus(m.id, 'watchlist');
+      }
+
+      // If TV series, unmark watched episodes
+      if (mediaType === 'tv' && seasonDetail?.episodes) {
+        for (const ep of seasonDetail.episodes) {
+          if (isEpisodeWatched(currentData.id, activeSeason, ep.episode_number)) {
+            await toggleEpisodeWatched(currentData.id, activeSeason, ep.episode_number, ep.name);
+          }
+        }
+      }
+
+      // Remove from Marvel Order watched storage if present
+      try {
+        const stored = localStorage.getItem('phanteress_marvel_watched_v1');
+        if (stored) {
+          const ids: string[] = JSON.parse(stored);
+          const cleanCurrentTitle = title.toLowerCase().trim();
+          const nextIds = ids.filter((id) => {
+            const cleanId = id.replace(/_/g, ' ').replace(/-/g, ' ').toLowerCase().trim();
+            const match =
+              cleanId === cleanCurrentTitle ||
+              cleanCurrentTitle.includes(cleanId) ||
+              cleanId.includes(cleanCurrentTitle) ||
+              (currentData.id && id.includes(currentData.id.toString()));
+            return !match;
+          });
+          localStorage.setItem('phanteress_marvel_watched_v1', JSON.stringify(nextIds));
+          setOrderWatchedIds(nextIds);
+          window.dispatchEvent(new CustomEvent('phanteress_marvel_order_changed', { detail: { watched: nextIds } }));
+        }
+      } catch (err) {
+        console.warn('Error unmarking marvel watched:', err);
+      }
+    } else {
+      // 2. MARK AS WATCHED
+      if (libItem) {
+        await updateStatus(libItem.id, 'watched');
+      } else {
+        await addToLibrary(currentData, 'watched');
+      }
+
+      // If TV series, mark episodes watched
+      if (mediaType === 'tv' && seasonDetail?.episodes) {
+        for (const ep of seasonDetail.episodes) {
+          if (!isEpisodeWatched(currentData.id, activeSeason, ep.episode_number)) {
+            await toggleEpisodeWatched(currentData.id, activeSeason, ep.episode_number, ep.name);
+          }
+        }
+      }
+
+      // If matches Marvel Order, add to marvelWatched
+      try {
+        const storedItems = localStorage.getItem('phanteress_marvel_items_v1');
+        const storedWatched = localStorage.getItem('phanteress_marvel_watched_v1');
+        const cleanCurrentTitle = title.toLowerCase().trim();
+        let targetId = '';
+
+        if (storedItems) {
+          const mItems: any[] = JSON.parse(storedItems);
+          const match = mItems.find((m) => {
+            const mTitle = (m.title || '').toLowerCase().trim();
+            return mTitle === cleanCurrentTitle || cleanCurrentTitle.includes(mTitle) || mTitle.includes(cleanCurrentTitle);
+          });
+          if (match) targetId = match.id;
+        }
+
+        if (targetId) {
+          const currentIds: string[] = storedWatched ? JSON.parse(storedWatched) : [];
+          if (!currentIds.includes(targetId)) {
+            const nextIds = [...currentIds, targetId];
+            localStorage.setItem('phanteress_marvel_watched_v1', JSON.stringify(nextIds));
+            setOrderWatchedIds(nextIds);
+            window.dispatchEvent(new CustomEvent('phanteress_marvel_order_changed', { detail: { watched: nextIds } }));
+          }
+        }
+      } catch (err) {
+        console.warn('Error marking marvel watched:', err);
+      }
+    }
+  };
 
   // Trailer lookup
   const trailerVideo = currentData.videos?.results?.find(
@@ -330,9 +478,10 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
               {/* Phanteress Action Buttons (Movie vs Show) */}
               <div className="pt-1 pb-3 space-y-2">
                 {mediaType === 'movie' ? (
-                  /* Movie Row: [Watchlist] [✔️] [♥️] */
+                  /* Movie Row: [Watchlist] [Watched] [♥️] */
                   <div className="flex items-center gap-2">
                     <button
+                      type="button"
                       onClick={() => toggleWatchlist(currentData)}
                       className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                         currentStatus === 'watchlist'
@@ -345,25 +494,21 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
                     </button>
 
                     <button
-                      onClick={() => {
-                        const isFuture = currentData.release_date && new Date(currentData.release_date).getTime() > Date.now();
-                        if (isFuture) {
-                          alert(`"${title}" has not been released yet.`);
-                          return;
-                        }
-                        toggleWatched(currentData);
-                      }}
+                      type="button"
+                      onClick={handleToggleWatched}
                       className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                        currentStatus === 'watched'
+                        isCurrentlyWatched
                           ? 'bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)] border border-emerald-400'
                           : 'bg-zinc-900 hover:bg-zinc-850 text-zinc-300 border border-zinc-800'
                       }`}
+                      title={isCurrentlyWatched ? 'Click to mark unwatched' : 'Mark as watched'}
                     >
                       <Check className="w-3.5 h-3.5 stroke-[2.5]" />
                       <span>Watched</span>
                     </button>
 
                     <button
+                      type="button"
                       onClick={() => toggleFavoriteItem(currentData)}
                       className={`p-2 rounded-xl border text-xs transition-all cursor-pointer ${
                         isFavorite
@@ -376,9 +521,10 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
                     </button>
                   </div>
                 ) : (
-                  /* Show Row: [Add To Shows] [Watchlist] [♥️] */
+                  /* Show Row: [Add To Shows] [Watched] [Watchlist] [♥️] */
                   <div className="flex items-center gap-2">
                     <button
+                      type="button"
                       onClick={() => toggleAddToShows(currentData)}
                       className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                         currentStatus === 'watching'
@@ -391,6 +537,21 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
                     </button>
 
                     <button
+                      type="button"
+                      onClick={handleToggleWatched}
+                      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                        isCurrentlyWatched
+                          ? 'bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)] border border-emerald-400'
+                          : 'bg-zinc-900 hover:bg-zinc-850 text-zinc-300 border border-zinc-800'
+                      }`}
+                      title={isCurrentlyWatched ? 'Click to mark unwatched' : 'Mark as watched'}
+                    >
+                      <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                      <span>Watched</span>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => toggleWatchlist(currentData)}
                       className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                         currentStatus === 'watchlist'
@@ -403,6 +564,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
                     </button>
 
                     <button
+                      type="button"
                       onClick={() => toggleFavoriteItem(currentData)}
                       className={`p-2 rounded-xl border text-xs transition-all cursor-pointer ${
                         isFavorite

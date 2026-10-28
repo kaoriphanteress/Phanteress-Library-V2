@@ -238,7 +238,17 @@ export async function discoverByGenre(type: 'movie' | 'tv', genreId: number): Pr
     }
   } catch {
     const pool = type === 'movie' ? FALLBACK_MOVIES : FALLBACK_TV;
-    return pool.filter(i => (i.genre_ids || []).includes(genreId));
+    return pool.filter(i => {
+      const ids = i.genre_ids || [];
+      const gList = i.genres ? i.genres.map(g => g.id) : [];
+      const allIds = new Set([...ids, ...gList]);
+      if (allIds.has(genreId)) return true;
+      // TV genre mappings
+      if ((genreId === 28 || genreId === 12) && (allIds.has(10759) || allIds.has(28) || allIds.has(12))) return true;
+      if ((genreId === 878 || genreId === 14) && (allIds.has(10765) || allIds.has(878) || allIds.has(14))) return true;
+      if ((genreId === 27 || genreId === 53) && (allIds.has(9648) || allIds.has(53) || allIds.has(27))) return true;
+      return false;
+    });
   }
 }
 
@@ -248,7 +258,7 @@ export const FALLBACK_TRENDING: TMDBItem[] = [
     id: 96677,
     name: 'Lupin',
     overview: 'Inspired by the adventures of Arsène Lupin, gentleman thief Assane Diop sets out to avenge his father for an injustice inflicted by a wealthy family.',
-    poster_path: '/eFIdq210R45B0uD3s1gG90gW5gV.jpg',
+    poster_path: '/74xTEgt7R36Fpooo50r9T25onhq.jpg',
     backdrop_path: '/aY7zv2pfk9H0QxaaL3PBjvalbKQ.jpg',
     media_type: 'tv',
     first_air_date: '2021-01-08',
@@ -256,26 +266,28 @@ export const FALLBACK_TRENDING: TMDBItem[] = [
     vote_count: 2240,
     number_of_seasons: 3,
     number_of_episodes: 17,
-    genres: [{ id: 80, name: 'Crime' }, { id: 18, name: 'Drama' }, { id: 9648, name: 'Mystery' }]
+    genre_ids: [80, 18, 9648, 53],
+    genres: [{ id: 80, name: 'Crime' }, { id: 18, name: 'Drama' }, { id: 9648, name: 'Mystery' }, { id: 53, name: 'Thriller' }]
   },
   {
     id: 1061474,
     title: 'Superman',
     overview: 'Follows the titular superhero as he reconciles his heritage with his human upbringing. He is the embodiment of truth, justice and the American way in a world that views kindness as old-fashioned.',
-    poster_path: '/ombsmhYUqR4Vo8MsmqlG1AUeZrC.jpg',
+    poster_path: '/d5NXSklXo0qyIYkgV94XAgMIckC.jpg',
     backdrop_path: '/9nhjGaFLKtddDPtPaXqEmKqsWdH.jpg',
     media_type: 'movie',
     release_date: '2025-07-11',
     vote_average: 8.3,
     vote_count: 1450,
     runtime: 142,
+    genre_ids: [28, 878, 12],
     genres: [{ id: 28, name: 'Action' }, { id: 878, name: 'Sci-Fi' }, { id: 12, name: 'Adventure' }]
   },
   {
     id: 93405,
     name: 'Squid Game',
     overview: 'Hundreds of cash-strapped players accept a strange invitation to compete in children\'s games. Inside, a tempting prize awaits — with deadly high stakes.',
-    poster_path: '/dDlGKaHk1o4fT4k3s6v7b1e8.jpg',
+    poster_path: '/fcXdJlbSdUEeMSJFsXKsznGwwok.jpg',
     backdrop_path: '/2meX1nMdScFOoV4370rqHWKm5oY.jpg',
     media_type: 'tv',
     first_air_date: '2021-09-17',
@@ -283,7 +295,8 @@ export const FALLBACK_TRENDING: TMDBItem[] = [
     vote_count: 14800,
     number_of_seasons: 2,
     number_of_episodes: 16,
-    genres: [{ id: 18, name: 'Drama' }, { id: 9648, name: 'Mystery' }, { id: 53, name: 'Thriller' }]
+    genre_ids: [18, 9648, 53, 27],
+    genres: [{ id: 18, name: 'Drama' }, { id: 9648, name: 'Mystery' }, { id: 53, name: 'Thriller' }, { id: 27, name: 'Horror' }]
   },
   {
     id: 693134,
@@ -296,6 +309,7 @@ export const FALLBACK_TRENDING: TMDBItem[] = [
     vote_average: 8.2,
     vote_count: 6100,
     runtime: 166,
+    genre_ids: [878, 12],
     genres: [{ id: 878, name: 'Sci-Fi' }, { id: 12, name: 'Adventure' }]
   },
   {
@@ -310,13 +324,14 @@ export const FALLBACK_TRENDING: TMDBItem[] = [
     vote_count: 1200,
     number_of_seasons: 2,
     number_of_episodes: 16,
-    genres: [{ id: 28, name: 'Action' }, { id: 12, name: 'Adventure' }]
+    genre_ids: [28, 12, 10759, 14, 10765],
+    genres: [{ id: 28, name: 'Action' }, { id: 12, name: 'Adventure' }, { id: 10759, name: 'Action & Adventure' }, { id: 14, name: 'Fantasy' }, { id: 10765, name: 'Sci-Fi & Fantasy' }]
   },
   {
     id: 823464,
     title: 'Godzilla x Kong: The New Empire',
     overview: 'Following their explosive showdown, Godzilla and Kong must reunite against a colossal undiscovered threat hidden within our world, challenging their very existence.',
-    poster_path: '/tMefBSflR6OEnTvlKhxhybghy4U.jpg',
+    poster_path: '/8cdWjvZQUExUUTzyp4t6EDMubfO.jpg',
     backdrop_path: '/qrGtVF3YZvJnecuNkFPFQ94ip7h.jpg',
     media_type: 'movie',
     release_date: '2024-03-29',
@@ -333,7 +348,7 @@ export const FALLBACK_MOVIES: TMDBItem[] = [
     id: 575264,
     title: 'Mission: Impossible - The Final Reckoning',
     overview: 'Our lives are the sum of our choices. Ethan Hunt and his IMF team face their most perilous mission yet.',
-    poster_path: '/z53DkWpUn4vg6ge4S4p4SmhGzL.jpg',
+    poster_path: '/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg',
     backdrop_path: '/628Dep6AxEtDxjZoGP78TsOxYbK.jpg',
     media_type: 'movie',
     release_date: '2025-05-23',
@@ -384,7 +399,8 @@ export const FALLBACK_TV: TMDBItem[] = [
     vote_count: 22800,
     number_of_seasons: 8,
     number_of_episodes: 73,
-    genres: [{ id: 10765, name: 'Sci-Fi & Fantasy' }, { id: 18, name: 'Drama' }]
+    genre_ids: [10765, 878, 14, 18, 28, 12],
+    genres: [{ id: 10765, name: 'Sci-Fi & Fantasy' }, { id: 14, name: 'Fantasy' }, { id: 878, name: 'Sci-Fi' }, { id: 18, name: 'Drama' }]
   },
   {
     id: 66732,

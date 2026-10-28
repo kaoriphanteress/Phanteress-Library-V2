@@ -1,0 +1,75 @@
+Main Plan for the Order, the other files are just the list of titles on each category.
+
+I want all screens doesn't look floating pill, i mean i want it to be whole screen not some floating window thingy.
+
+Rule on doing each screen: 
+Reminder: this is a thing that setup you own watching list. Questions > Generate > Done > Options To Re-Edit your List and More
+
+Don't add on the screen the things i did this (), this are just for notes and meaning for you.
+
+• Screen 1
+- will show up when you first time open the order, a guide or survey for your order watch list.
+
+Question: Do you want to setup your own Watchlist?
+Description: Personalize your viewing experience using custom properties, canon timelines, grouping styles, and viewing calendars. This supports any franchise type, and you can suggest more franchises in the settings.
+
+[Yes, Let's Build] (then already proceed to Screen 2)
+[No] (and proceed to Progress Tab)
+
+• Screen 2
+- will show up after you choose "Yes let's build" option on screen 1
+
+Question: Which specific franchise would you prefer to acquire?
+
+(generate some descriptions on this choices)
+[Marvel] Active (then proceed to screen 3.1)
+[DC] Coming Soon
+[Wizarding World] Coming Soon
+[Star Wars] Coming Soon
+
+[Continue] (to continue to next screen base on what the person chosen)
+
+Coming Soon - not able to choose, coming soon
+
+• Screen 3.1
+- will show of After you choose "Marvel" on screen 2
+
+Question: Choose a Properties:
+Description: Select how extensive you want your Marvel Watchlist to be.
+
+(generate descriptions of these too)
+[Doomsday List] (list of titles on file codename: doomsday) (proceed already to !!!
+[Marvel Cinematic Universe] (list of titles on file codename: focusmcu) (screen 4)
+extra on Marvel Cinematic Universe: [Add Cameo Movies?] (list of titles on file codename: focusmcuextra) (show when the person click the Marvel Cinematic Universe Option)
+[All Marvel Properties] (list of titles on file codename: allmarvelproperties) (screen 4)
+
+[Continue] (to continue to next screen base on what the person chosen)
+
+• Screen 4 
+- will show after you choose "Marvel Cinematic Universe" or "All Marvel Properties"
+
+Question: Choose your Watch Order:
+Description: How do you want your viewing roadmap sequenced?
+
+(generate descriptions on these too)
+[Release Order] (list of titles on file codename: releaseorder) (screen 5)
+[Story Order] (list of titles on file codename: storyorder) (screen 5)
+[Phanteress Order] Coming Soon
+
+[Continue] (to continue to next screen base on what the person chosen)
+
+• Screen 5
+- will show after you choose "Release" or "Story" Order
+
+Question: How would you like your list displayed?
+Description: Choose whether to categorize your watchlist into phases or view it as an unbroken marathon
+
+(generate descriptions on these too)
+[By Phase] (file codename: byphase) 
+[One Long List] (file codename: onelonglist)
+
+[Continue] (to continue to next screen for generating)
+
+• Screen 6
+- Last Screen where you see your titles generate or created infront of you.
+

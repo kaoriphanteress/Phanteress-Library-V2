@@ -50,9 +50,11 @@ export const PWALandingPage: React.FC<PWALandingPageProps> = ({ onEnterStandalon
       {/* Top Simple Brand Marker */}
       <header className="relative z-10 max-w-6xl mx-auto w-full px-6 py-6 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#ff2a85] to-[#f43f5e] flex items-center justify-center text-white font-extrabold text-base shadow-[0_0_15px_rgba(255,42,133,0.5)]">
-            P
-          </div>
+          <img
+            src="/logo.png"
+            alt="Phanteress Library"
+            className="w-9 h-9 rounded-xl object-cover shadow-[0_0_20px_rgba(255,42,133,0.5)] border border-[#ff2a85]/40"
+          />
           <span className="text-xl font-extrabold tracking-tight text-white">
             PHANTERESS <span className="text-[#ff2a85]">LIBRARY</span>
           </span>
@@ -69,6 +71,16 @@ export const PWALandingPage: React.FC<PWALandingPageProps> = ({ onEnterStandalon
 
       {/* Main Hero & Installation Action */}
       <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-14 text-center flex flex-col items-center">
+        {/* App Logo Display */}
+        <div className="relative mb-6 group">
+          <div className="absolute inset-0 bg-[#ff2a85]/40 rounded-3xl blur-2xl group-hover:bg-[#ff2a85]/60 transition-all" />
+          <img
+            src="/logo.png"
+            alt="Phanteress Library Logo"
+            className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-3xl object-cover border-2 border-[#ff2a85]/60 shadow-[0_10px_35px_rgba(255,42,133,0.5)] transition-transform hover:scale-105"
+          />
+        </div>
+
         {/* Top Tag */}
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-zinc-900/90 border border-zinc-800 text-xs text-zinc-300 mb-6 shadow-sm">
           <Sparkles className="w-3.5 h-3.5 text-[#ff2a85]" />
@@ -138,7 +150,7 @@ export const PWALandingPage: React.FC<PWALandingPageProps> = ({ onEnterStandalon
 
       {/* Footer */}
       <footer className="relative z-10 max-w-6xl mx-auto w-full px-6 py-6 text-center text-xs text-zinc-500">
-        <p>Showty Tracker · Powered by TMDB & Firebase · Pure Black and Hot Pink Theme</p>
+        <p>Phanteress Library · Powered by TMDB & Firebase · Pure Black and Hot Pink Theme</p>
       </footer>
 
       {/* iOS Installation Instructions Modal */}
@@ -152,7 +164,7 @@ export const PWALandingPage: React.FC<PWALandingPageProps> = ({ onEnterStandalon
             <p className="text-xs text-zinc-400 mb-4 leading-relaxed">
               1. Tap the <strong className="text-white">Share</strong> button in Safari's toolbar.<br />
               2. Scroll down and tap <strong className="text-white">Add to Home Screen</strong>.<br />
-              3. Open Showty from your home screen for the full app experience!
+              3. Open Phanteress Library from your home screen for the full app experience!
             </p>
             <div className="flex gap-2">
               <button

@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Showty Tracker",
-  "short_name": "Showty",
-  "description": "Showly-inspired movie and TV show progress tracker with Black & Pink theme.",
+  "name": "Phanteress Library",
+  "short_name": "Phanteress",
+  "description": "Showly-inspired black and pink themed movie & TV show tracker with personalized watchlists, episode tracking, and custom lists.",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
@@ -11,15 +11,15 @@
   "theme_color": "#060609",
   "icons": [
     {
-      "src": "/icon.svg",
-      "sizes": "192x192 512x512",
-      "type": "image/svg+xml",
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon.svg",
-      "sizes": "192x192 512x512",
-      "type": "image/svg+xml",
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ]

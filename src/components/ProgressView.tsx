@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   Check,
+  RotateCcw,
+  Clock,
   Search,
   ChevronDown,
   ChevronRight,
@@ -15,15 +17,31 @@ import {
 } from 'lucide-react';
 import { TMDBItem, WatchStatus, TMDBSeasonDetail, LibraryItem } from '../types/tmdb';
 import { useLibrary } from '../context/LibraryContext';
-import { getImageUrl, getTVSeasonDetails } from '../services/tmdb';
+import { getImageUrl, getTVSeasonDetails, searchMulti } from '../services/tmdb';
+import { OrderTimeline } from './OrderTimeline';
+import {
+  getStoredOrderConfig,
+  getStoredOrderItems,
+  getStoredWatchedIds,
+  getStoredSkippedIds,
+  getStoredFavoriteIds,
+  isOrderSetupDone,
+  saveOrderConfig,
+  saveOrderItems,
+  saveStoredWatchedIds,
+  saveStoredSkippedIds,
+  saveStoredFavoriteIds
+} from '../services/marvelOrderService';
+import { MarvelOrderConfig, MarvelItem } from '../data/marvelData';
 
 interface ProgressViewProps {
   onSelect: (item: TMDBItem) => void;
   onExplore: () => void;
   onOpenSearch: () => void;
+  onNavigateToOrder?: () => void;
 }
 
-export type MediaTabType = 'media' | 'shows' | 'movies' | 'marvel';
+export type MediaTabType = 'media' | 'shows' | 'movies' | 'order';
 
 const toTMDBItem = (item: LibraryItem): TMDBItem => ({
   id: item.tmdbId,
@@ -45,6 +63,7 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
   onSelect,
   onExplore,
   onOpenSearch,
+  onNavigateToOrder,
 }) => {
   const {
     library,
@@ -54,8 +73,35 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
     getShowWatchedCount
   } = useLibrary();
 
+  // Marvel Watchlist State
+  const [marvelConfig, setMarvelConfig] = useState<MarvelOrderConfig>(getStoredOrderConfig);
+  const [marvelItems, setMarvelItems] = useState<MarvelItem[]>(getStoredOrderItems);
+  const [marvelWatched, setMarvelWatched] = useState<string[]>(getStoredWatchedIds);
+  const [marvelSkipped, setMarvelSkipped] = useState<string[]>(getStoredSkippedIds);
+  const [marvelFavorites, setMarvelFavorites] = useState<string[]>(getStoredFavoriteIds);
+  const [marvelSetupDone, setMarvelSetupDone] = useState<boolean>(isOrderSetupDone);
+
+  // Sync Marvel Order state across views
+  useEffect(() => {
+    const handleOrderSync = (e: any) => {
+      if (e?.detail?.watched) {
+        setMarvelWatched(e.detail.watched);
+      } else {
+        setMarvelWatched(getStoredWatchedIds());
+      }
+      setMarvelSkipped(getStoredSkippedIds());
+      setMarvelFavorites(getStoredFavoriteIds());
+    };
+    window.addEventListener('phanteress_marvel_order_changed', handleOrderSync);
+    window.addEventListener('storage', handleOrderSync);
+    return () => {
+      window.removeEventListener('phanteress_marvel_order_changed', handleOrderSync);
+      window.removeEventListener('storage', handleOrderSync);
+    };
+  }, []);
+
   // 1. Top 4-Way Typographic Switcher: "Media" "Shows" "Movies" "Marvel"
-  const [activeTabType, setActiveTabType] = useState<MediaTabType>('shows');
+  const [activeTabType, setActiveTabType] = useState<MediaTabType>('media');
 
   // 2. Sub-tabs: Progress, Calendar, History (History is available on Shows & Media)
   const [subTab, setSubTab] = useState<'progress' | 'calendar' | 'history'>('progress');
@@ -148,9 +194,14 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
     });
   }, [library, filterOnHoldOnly]);
 
+  // Movies tab must NEVER include Order titles - only true TMDB user library movies
   const activeMovies = useMemo(() => {
-    return library.filter((i) => i.mediaType === 'movie' && i.status === 'watchlist');
+    return library.filter((i) => i.mediaType === 'movie' && i.status === 'watchlist' && !(i as any).isOrderTitle && !(i as any).isMarvelOrder);
   }, [library]);
+
+  // Daily Watch Calendar State for Order tab
+  const [dailyPace, setDailyPace] = useState<number>(1);
+  const [calendarPacePickerOpen, setCalendarPacePickerOpen] = useState(false);
 
   const onHoldShows = useMemo(() => {
     return library.filter((i) => i.mediaType === 'tv' && (i.status === 'on_hold' || i.status === 'dropped'));
@@ -213,7 +264,7 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
 
   // Combined Media or tab-specific list
   const displayItems = useMemo(() => {
-    if (activeTabType === 'marvel') return [];
+    if (activeTabType === 'order') return [];
 
     let list: typeof library = [];
     if (activeTabType === 'shows') {
@@ -417,21 +468,17 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-4 pb-12 space-y-5">
-      {/* 1. Large Typographic Top Switcher: "Media" "Shows" "Movies" "Marvel" */}
-      <div className="flex items-baseline gap-4 sm:gap-6 overflow-x-auto no-scrollbar select-none pt-1">
-        {(['media', 'shows', 'movies', 'marvel'] as MediaTabType[]).map((tabKey) => {
-          const label = tabKey === 'media' ? 'Media' : tabKey === 'shows' ? 'Shows' : tabKey === 'movies' ? 'Movies' : 'Marvel';
+      {/* 1. Top 4 Switcher: "Media" "Shows" "Movies" "Order" - Fits in one single frame without scrolling */}
+      <div className="grid grid-cols-4 items-center justify-between gap-1 select-none pt-1 pb-1">
+        {(['media', 'shows', 'movies', 'order'] as MediaTabType[]).map((tabKey) => {
+          const label = tabKey === 'media' ? 'Media' : tabKey === 'shows' ? 'Shows' : tabKey === 'movies' ? 'Movies' : 'Order';
           const isActive = activeTabType === tabKey;
           return (
             <button
               key={tabKey}
-              onClick={() => {
-                setActiveTabType(tabKey);
-                if (tabKey === 'movies' && subTab === 'history') {
-                  setSubTab('progress');
-                }
-              }}
-              className={`text-2xl sm:text-3xl md:text-4xl font-serif font-bold transition-colors cursor-pointer capitalize shrink-0 ${
+              type="button"
+              onClick={() => setActiveTabType(tabKey)}
+              className={`text-center py-1 text-xl sm:text-2xl md:text-3xl font-serif font-bold transition-colors cursor-pointer truncate ${
                 isActive ? 'text-white' : 'text-zinc-600 hover:text-zinc-400'
               }`}
             >
@@ -468,9 +515,8 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
             )}
           </button>
 
-          {activeTabType !== 'movies' && (
-            <button
-              onClick={() => setSubTab('history')}
+          <button
+            onClick={() => setSubTab('history')}
               className={`pb-2 relative transition-colors cursor-pointer ${
                 subTab === 'history' ? 'text-white font-semibold' : 'text-zinc-500 hover:text-zinc-300'
               }`}
@@ -479,8 +525,7 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
               {subTab === 'history' && (
                 <span className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-[#ff2a85] rounded-full shadow-[0_0_8px_rgba(255,42,133,0.8)]" />
               )}
-            </button>
-          )}
+          </button>
         </div>
 
         <button
@@ -497,67 +542,132 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
       {/* ========================================================================= */}
       {subTab === 'progress' && (
         <div className="space-y-4">
-          {/* Filter Pills Row with Authentic Showly Sort Button */}
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
-            {/* Showly Sort Pill Button: Opens SORT BY: bottom sheet */}
-            <button
-              type="button"
-              onClick={handleOpenSortModal}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-transparent border border-zinc-700/80 hover:border-zinc-500 text-xs text-white transition-colors cursor-pointer shrink-0"
-            >
-              <span>{activeSortLabel}</span>
-              <span className="text-zinc-400 font-mono text-[11px]">
-                {sortDirection === 'asc' ? '↑' : '↓'}
-              </span>
-            </button>
+          {/* Filter Pills Row with Authentic Showly Sort Button (hidden on Order tab) */}
+          {activeTabType !== 'order' && (
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+              {/* Showly Sort Pill Button: Opens SORT BY: bottom sheet */}
+              <button
+                type="button"
+                onClick={handleOpenSortModal}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-transparent border border-zinc-700/80 hover:border-zinc-500 text-xs text-white transition-colors cursor-pointer shrink-0"
+              >
+                <span>{activeSortLabel}</span>
+                <span className="text-zinc-400 font-mono text-[11px]">
+                  {sortDirection === 'asc' ? '↑' : '↓'}
+                </span>
+              </button>
 
-            {/* Upcoming and On Hold chips for Shows / Media */}
-            {(activeTabType === 'shows' || activeTabType === 'media') && (
-              <>
-                <button
-                  onClick={() => {
-                    setFilterUpcomingOnly(!filterUpcomingOnly);
-                    setFilterOnHoldOnly(false);
-                  }}
-                  className={`px-3.5 py-1.5 rounded-xl border text-xs transition-colors cursor-pointer shrink-0 ${
-                    filterUpcomingOnly
-                      ? 'border-[#ff2a85] bg-[#ff2a85]/15 text-white'
-                      : 'border-zinc-700/80 hover:border-zinc-500 text-zinc-300 bg-transparent'
-                  }`}
-                >
-                  Upcoming
-                </button>
+              {/* Upcoming and On Hold chips for Shows / Media */}
+              {(activeTabType === 'shows' || activeTabType === 'media') && (
+                <>
+                  <button
+                    onClick={() => {
+                      setFilterUpcomingOnly(!filterUpcomingOnly);
+                      setFilterOnHoldOnly(false);
+                    }}
+                    className={`px-3.5 py-1.5 rounded-xl border text-xs transition-colors cursor-pointer shrink-0 ${
+                      filterUpcomingOnly
+                        ? 'border-[#ff2a85] bg-[#ff2a85]/15 text-white'
+                        : 'border-zinc-700/80 hover:border-zinc-500 text-zinc-300 bg-transparent'
+                    }`}
+                  >
+                    Upcoming
+                  </button>
 
-                <button
-                  onClick={() => {
-                    setFilterOnHoldOnly(!filterOnHoldOnly);
-                    setFilterUpcomingOnly(false);
-                  }}
-                  className={`px-3.5 py-1.5 rounded-xl border text-xs transition-colors cursor-pointer shrink-0 ${
-                    filterOnHoldOnly
-                      ? 'border-[#ff2a85] bg-[#ff2a85]/15 text-white'
-                      : 'border-zinc-700/80 hover:border-zinc-500 text-zinc-300 bg-transparent'
-                  }`}
-                >
-                  On Hold
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* MARVEL VIEW (Staged empty per user request) */}
-          {activeTabType === 'marvel' ? (
-            <div className="py-24 text-center flex flex-col items-center justify-center bg-[#0c0c14] border border-zinc-900 rounded-2xl p-8">
-              <div className="w-14 h-14 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-3 text-[#ff2a85]">
-                <Layers className="w-6 h-6" />
-              </div>
-              <h2 className="text-base font-bold text-white mb-1.5 uppercase font-serif tracking-wider">
-                Marvel Chronology
-              </h2>
-              <p className="text-xs text-zinc-400 max-w-sm mb-2 leading-relaxed">
-                Marvel Cinematic Universe chronological and release order will appear here once connected to the Order tab.
-              </p>
+                  <button
+                    onClick={() => {
+                      setFilterOnHoldOnly(!filterOnHoldOnly);
+                      setFilterUpcomingOnly(false);
+                    }}
+                    className={`px-3.5 py-1.5 rounded-xl border text-xs transition-colors cursor-pointer shrink-0 ${
+                      filterOnHoldOnly
+                        ? 'border-[#ff2a85] bg-[#ff2a85]/15 text-white'
+                        : 'border-zinc-700/80 hover:border-zinc-500 text-zinc-300 bg-transparent'
+                    }`}
+                  >
+                    On Hold
+                  </button>
+                </>
+              )}
             </div>
+          )}
+
+          {/* MARVEL VIEW (Connected directly to Order Timeline) */}
+          {activeTabType === 'order' ? (
+            marvelSetupDone ? (
+              <OrderTimeline
+                config={marvelConfig}
+                items={marvelItems}
+                watchedIds={marvelWatched}
+                skippedIds={marvelSkipped}
+                favoriteIds={marvelFavorites}
+                onUpdateItems={(newItems) => {
+                  setMarvelItems(newItems);
+                  saveOrderItems(newItems);
+                }}
+                onUpdateWatched={(newWatched) => {
+                  setMarvelWatched(newWatched);
+                  saveStoredWatchedIds(newWatched);
+                }}
+                onUpdateSkipped={(newSkipped) => {
+                  setMarvelSkipped(newSkipped);
+                  saveStoredSkippedIds(newSkipped);
+                }}
+                onUpdateFavorites={(newFavs) => {
+                  setMarvelFavorites(newFavs);
+                  saveStoredFavoriteIds(newFavs);
+                }}
+                onUpdateConfig={(newCfg) => {
+                  setMarvelConfig(newCfg);
+                  saveOrderConfig(newCfg);
+                }}
+                onOpenWizard={() => {
+                  if (onNavigateToOrder) onNavigateToOrder();
+                }}
+                onSelectTitle={async (title, year) => {
+                  try {
+                    const results = await searchMulti(title);
+                    if (results && results.length > 0) {
+                      let best = results[0];
+                      if (year) {
+                        const m = results.find((r) => {
+                          const d = r.release_date || r.first_air_date;
+                          return d && d.startsWith(year.toString());
+                        });
+                        if (m) best = m;
+                      }
+                      onSelect(best);
+                    }
+                  } catch (e) {
+                    console.warn('TMDB search error for order title:', e);
+                  }
+                }}
+              />
+            ) : (
+              <div className="rounded-3xl bg-[#0a0a12] border border-zinc-800/80 p-8 sm:p-12 text-center relative overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.8)]">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#1a1220] to-[#110e18] border border-[#ff2a85]/40 flex items-center justify-center text-[#ff2a85] mb-4 mx-auto shadow-[0_0_25px_rgba(255,42,133,0.3)]">
+                  <Layers className="w-8 h-8" />
+                </div>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#ff2a85]/20 text-[#ff2a85] border border-[#ff2a85]/30">
+                  Marvel Chronology & Timelines
+                </span>
+                <h2 className="text-xl sm:text-2xl font-extrabold text-white mt-2 mb-2 font-serif">
+                  Curate Your Marvel Universe Watchlist
+                </h2>
+                <p className="text-xs sm:text-sm text-zinc-400 max-w-md mx-auto mb-6 leading-relaxed">
+                  Personalize your Marvel journey with custom properties (Road to Doomsday, Focus MCU Sacred Timeline, or All 280+ Properties) in Story or Release order.
+                </p>
+                <button
+                  onClick={() => {
+                    if (onNavigateToOrder) onNavigateToOrder();
+                  }}
+                  className="inline-flex items-center gap-2 py-3 px-6 rounded-2xl bg-gradient-to-r from-[#ff2a85] to-[#f43f5e] hover:from-[#ff3a95] hover:to-[#f54f6e] text-white text-xs font-bold shadow-[0_0_20px_rgba(255,42,133,0.4)] transition-all cursor-pointer transform active:scale-[0.98]"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Setup Marvel Watchlist</span>
+                </button>
+              </div>
+            )
           ) : displayItems.length === 0 ? (
             /* Empty State */
             <div className="py-20 text-center flex flex-col items-center justify-center">
@@ -876,6 +986,165 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
       {/* TAB: CALENDAR                                                             */}
       {/* ========================================================================= */}
       {subTab === 'calendar' && (
+        activeTabType === 'order' ? (
+          /* ================= ORDER DAILY WATCH CALENDAR ================= */
+          <div className="space-y-6 pt-1">
+            {/* Calendar Controls & Pace Selection Header */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-[#0c0c16] border border-zinc-800 space-y-3.5 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base sm:text-lg font-serif font-bold text-white flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4 text-[#ff2a85]" />
+                    <span>Order Daily Watch Plan</span>
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    {marvelItems.filter((i) => !marvelWatched.includes(i.id) && !marvelSkipped.includes(i.id)).length} titles remaining
+                    {marvelItems.filter((i) => !marvelWatched.includes(i.id) && !marvelSkipped.includes(i.id)).length > 0
+                      ? ` · Estimated completion in ${Math.ceil(marvelItems.filter((i) => !marvelWatched.includes(i.id) && !marvelSkipped.includes(i.id)).length / dailyPace)} days`
+                      : ' · All caught up!'}
+                  </p>
+                </div>
+
+                {/* Redo / Reset Calendar CTA Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Force refresh/redo calendar from today
+                    setCalendarPacePickerOpen(!calendarPacePickerOpen);
+                  }}
+                  className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#ff2a85] to-[#f43f5e] hover:from-[#ff3a95] hover:to-[#f54f6e] text-white text-xs font-semibold shadow-[0_0_12px_rgba(255,42,133,0.35)] transition-all cursor-pointer self-start sm:self-auto"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Redo Calendar</span>
+                </button>
+              </div>
+
+              {/* Pace Selector Chips */}
+              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-zinc-850">
+                <span className="text-[11px] font-semibold text-zinc-400 mr-1">Daily Pace:</span>
+                {[
+                  { pace: 1, label: '1 Title / Day' },
+                  { pace: 2, label: '2 Titles / Day' },
+                  { pace: 3, label: '3 Titles / Day' },
+                ].map((item) => (
+                  <button
+                    key={item.pace}
+                    type="button"
+                    onClick={() => setDailyPace(item.pace)}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                      dailyPace === item.pace
+                        ? 'bg-[#ff2a85] text-white shadow-sm font-semibold'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Daily Schedule Cards */}
+            {marvelItems.filter((i) => !marvelWatched.includes(i.id) && !marvelSkipped.includes(i.id)).length === 0 ? (
+              <div className="py-20 text-center space-y-2">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400">
+                  <Check className="w-6 h-6" />
+                </div>
+                <h4 className="text-lg font-serif font-bold text-white">All Caught Up!</h4>
+                <p className="text-xs text-zinc-400 max-w-sm mx-auto">
+                  You have watched every title in your active order. Use "Adjust Order" to add more properties or reset!
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {(() => {
+                  const unwatched = marvelItems.filter((i) => !marvelWatched.includes(i.id) && !marvelSkipped.includes(i.id));
+                  // Group titles by day
+                  const dayGroups: { dayLabel: string; dateStr: string; items: typeof unwatched }[] = [];
+                  const now = new Date();
+
+                  unwatched.forEach((item, index) => {
+                    const dayOffset = Math.floor(index / dailyPace);
+                    if (dayOffset >= 30) return; // limit to next 30 days
+                    const targetDate = new Date(now.getTime() + dayOffset * 24 * 60 * 60 * 1000);
+                    const isToday = dayOffset === 0;
+                    const isTomorrow = dayOffset === 1;
+                    const dateFormatted = targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    const weekday = targetDate.toLocaleDateString('en-US', { weekday: 'short' });
+
+                    const dayLabel = isToday ? `Today · ${dateFormatted}` : isTomorrow ? `Tomorrow · ${dateFormatted}` : `${weekday} · ${dateFormatted}`;
+
+                    let existing = dayGroups.find((g) => g.dayLabel === dayLabel);
+                    if (!existing) {
+                      existing = { dayLabel, dateStr: dateFormatted, items: [] };
+                      dayGroups.push(existing);
+                    }
+                    existing.items.push(item);
+                  });
+
+                  return dayGroups.map((group, gIdx) => (
+                    <div key={gIdx} className="space-y-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-serif font-bold text-zinc-300 uppercase tracking-wider">
+                          {group.dayLabel}
+                        </span>
+                        <div className="flex-1 h-[1px] bg-zinc-850" />
+                      </div>
+
+                      <div className="space-y-2">
+                        {group.items.map((titleItem) => {
+                          return (
+                            <div
+                              key={titleItem.id}
+                              className="p-3 sm:p-3.5 rounded-2xl bg-[#0e0e18] border border-zinc-800 hover:border-zinc-700 transition-all flex items-center justify-between gap-3 shadow-sm"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-8 h-8 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0">
+                                  {titleItem.mediaType === 'tv' ? (
+                                    <Tv className="w-4 h-4 text-purple-400" />
+                                  ) : (
+                                    <Film className="w-4 h-4 text-rose-400" />
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <h4 className="text-xs sm:text-sm font-bold text-white truncate">
+                                    {titleItem.title}
+                                  </h4>
+                                  <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 mt-0.5">
+                                    <span className="text-[#ff2a85] font-semibold">{titleItem.year}</span>
+                                    <span>•</span>
+                                    <span>{titleItem.runtime}</span>
+                                    <span>•</span>
+                                    <span className="truncate">{titleItem.hero}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Quick Mark Watched Button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextWatched = [...marvelWatched, titleItem.id];
+                                  setMarvelWatched(nextWatched);
+                                  saveStoredWatchedIds(nextWatched);
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-semibold transition-all cursor-pointer shrink-0"
+                                title="Mark as Watched"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Watched</span>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* ================= SHOWS / MOVIES / MEDIA UPCOMING CALENDAR ================= */
         <div className="space-y-6 pt-1">
           <div className="flex items-center gap-2">
             <button
@@ -1060,12 +1329,13 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
             </div>
           )}
         </div>
+        )
       )}
 
       {/* ========================================================================= */}
       {/* TAB: HISTORY                                                              */}
       {/* ========================================================================= */}
-      {subTab === 'history' && activeTabType !== 'movies' && (
+      {subTab === 'history' && (
         <div className="space-y-5 pt-1">
           <div className="relative inline-block">
             <button
@@ -1121,13 +1391,126 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
             )}
           </div>
 
-          {historyWatchedEpisodes.length === 0 ? (
+          {/* Order Tab History */}
+          {activeTabType === 'order' ? (
+            marvelItems.filter((i) => marvelWatched.includes(i.id)).length === 0 ? (
+              <div className="py-24 text-center">
+                <h2 className="text-xl font-serif font-bold tracking-wider text-white mb-2 uppercase">
+                  ORDER HISTORY
+                </h2>
+                <p className="text-xs text-zinc-400">
+                  No Order titles marked as watched yet. Tap [✓] on titles in the timeline to log them here.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <h3 className="text-xl sm:text-2xl font-serif font-bold text-white">
+                  Completed Titles ({marvelItems.filter((i) => marvelWatched.includes(i.id)).length})
+                </h3>
+                <div className="space-y-2.5">
+                  {marvelItems
+                    .filter((i) => marvelWatched.includes(i.id))
+                    .map((item, idx) => (
+                      <div
+                        key={item.id}
+                        className="p-3 sm:p-3.5 rounded-2xl bg-[#0d0d16] border border-emerald-500/25 flex items-center justify-between gap-3 shadow-sm"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono text-xs font-bold flex items-center justify-center shrink-0">
+                            {idx + 1}
+                          </span>
+                          <div className="min-w-0">
+                            <h4 className="text-xs sm:text-sm font-bold text-white truncate">
+                              {item.title}
+                            </h4>
+                            <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 mt-0.5">
+                              <span className="text-[#ff2a85] font-semibold">{item.year}</span>
+                              <span>•</span>
+                              <span>{item.runtime}</span>
+                              <span>•</span>
+                              <span className="truncate">{item.hero}</span>
+                              <span>•</span>
+                              <span className="truncate">{item.phase}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Unmark Watched Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextWatched = marvelWatched.filter((id) => id !== item.id);
+                            setMarvelWatched(nextWatched);
+                            saveStoredWatchedIds(nextWatched);
+                          }}
+                          className="px-2.5 py-1 rounded-lg text-xs font-medium text-zinc-400 hover:text-red-400 hover:bg-zinc-900 border border-zinc-800 transition-colors cursor-pointer shrink-0"
+                          title="Unmark Watched"
+                        >
+                          Undo
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )
+          ) : activeTabType === 'movies' ? (
+            /* Movies History */
+            library.filter((i) => i.mediaType === 'movie' && i.status === 'watched').length === 0 ? (
+              <div className="py-24 text-center">
+                <h2 className="text-xl font-serif font-bold tracking-wider text-white mb-2 uppercase">
+                  MOVIE HISTORY
+                </h2>
+                <p className="text-xs text-zinc-400">
+                  No movies marked as watched yet.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <h3 className="text-xl sm:text-2xl font-serif font-bold text-white">
+                  Watched Movies ({library.filter((i) => i.mediaType === 'movie' && i.status === 'watched').length})
+                </h3>
+                <div className="space-y-2.5">
+                  {library
+                    .filter((i) => i.mediaType === 'movie' && i.status === 'watched')
+                    .map((item) => {
+                      const poster = getImageUrl(item.posterPath, 'w300');
+                      const tmdbObj = toTMDBItem(item);
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex items-center gap-3.5 p-3 rounded-2xl bg-[#0d0d16] border border-zinc-850"
+                        >
+                          <div
+                            onClick={() => onSelect(tmdbObj)}
+                            className="w-12 aspect-[2/3] rounded-lg overflow-hidden bg-zinc-900 shrink-0 border border-zinc-800 cursor-pointer"
+                          >
+                            {poster && <img src={poster} alt={item.title} className="w-full h-full object-cover" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4
+                              onClick={() => onSelect(tmdbObj)}
+                              className="text-sm font-serif font-bold text-white truncate cursor-pointer hover:text-[#ff2a85]"
+                            >
+                              {item.title}
+                            </h4>
+                            <p className="text-xs text-zinc-400 mt-0.5">{item.releaseDate ? item.releaseDate.substring(0, 4) : ''}</p>
+                          </div>
+                          <span className="px-2 py-1 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs font-semibold">
+                            Watched
+                          </span>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )
+          ) : historyWatchedEpisodes.length === 0 ? (
             <div className="py-24 text-center">
               <h2 className="text-xl font-serif font-bold tracking-wider text-white mb-2 uppercase">
                 HISTORY
               </h2>
               <p className="text-xs text-zinc-400">
-                No watched episodes logged yet.
+                No watched episodes or titles logged yet.
               </p>
             </div>
           ) : (

@@ -4,7 +4,9 @@ import {
   doc,
   setDoc,
   deleteDoc,
-  onSnapshot
+  onSnapshot,
+  getDocs,
+  writeBatch
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../services/firebase';
 import { useAuth } from './AuthContext';
@@ -322,14 +324,16 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const toggleWatched = async (item: TMDBItem) => {
     const mediaType: MediaType = item.media_type || (item.title ? 'movie' : 'tv');
     const id = `${mediaType}_${item.id}`;
-    const existing = library.find((i) => i.id === id);
+    const itemTitle = (item.title || item.name || '').toLowerCase().trim();
+    const existing = library.find(
+      (i) => i.id === id || i.tmdbId === item.id || (i.title && i.title.toLowerCase().trim() === itemTitle)
+    );
 
     if (existing && existing.status === 'watched') {
-      if (existing.favorite) {
-        await updateStatus(id, 'dropped');
-      } else {
-        await removeFromLibrary(id);
-      }
+      // Revert to watchlist (unwatched)
+      await updateStatus(existing.id, 'watchlist');
+    } else if (existing) {
+      await updateStatus(existing.id, 'watched');
     } else {
       await addToLibrary(item, 'watched');
     }
@@ -576,16 +580,21 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ? Number((ratedItems.reduce((acc, curr) => acc + (curr.userRating || 0), 0) / ratedItems.length).toFixed(1))
       : 0;
 
-    // Real genre breakdown from user's tracked library
+    // Real genre breakdown from user's watched titles only (zero phantom counts)
     const genreCountMap: Record<string, number> = {};
     library.forEach((item) => {
-      if (item.genreIds && item.genreIds.length > 0) {
-        item.genreIds.forEach((gid) => {
-          const match = TMDB_GENRES.find((g) => g.id === gid && g.id !== 0);
-          if (match) {
-            genreCountMap[match.name] = (genreCountMap[match.name] || 0) + 1;
-          }
-        });
+      // Only count items that are actually watched!
+      const isMovieWatched = item.mediaType === 'movie' && item.status === 'watched';
+      const isShowWatched = item.mediaType === 'tv' && episodes.some((e) => e.showId === item.tmdbId && e.watched);
+      if (isMovieWatched || isShowWatched) {
+        if (item.genreIds && item.genreIds.length > 0) {
+          item.genreIds.forEach((gid) => {
+            const match = TMDB_GENRES.find((g) => g.id === gid && g.id !== 0);
+            if (match) {
+              genreCountMap[match.name] = (genreCountMap[match.name] || 0) + 1;
+            }
+          });
+        }
       }
     });
 
@@ -606,9 +615,12 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [library, episodes]);
 
   const clearAllData = async () => {
+    // 1. Immediately reset all React state
     setLibrary([]);
     setEpisodes([]);
     setCustomLists([]);
+
+    // 2. Clear all local storage keys
     try {
       localStorage.removeItem(LOCAL_STORAGE_KEY_LIBRARY);
       localStorage.removeItem(LOCAL_STORAGE_KEY_EPISODES);
@@ -619,8 +631,37 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
       localStorage.removeItem('showty_library_v1');
       localStorage.removeItem('showty_episodes_v1');
       localStorage.removeItem('showty_custom_lists_v1');
+      
+      // Wipe any related keys
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith('phanteress_') || k.startsWith('showty_') || k.startsWith('custom_list'))) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach((k) => localStorage.removeItem(k));
     } catch (e) {
       console.warn('Clear local storage error:', e);
+    }
+
+    // 3. If signed in, delete all user data from Firestore in batches
+    if (user) {
+      try {
+        const watchlistSnap = await getDocs(collection(db, 'users', user.uid, 'watchlist'));
+        const episodesSnap = await getDocs(collection(db, 'users', user.uid, 'episodes'));
+        
+        const batch = writeBatch(db);
+        watchlistSnap.forEach((docSnap) => {
+          batch.delete(docSnap.ref);
+        });
+        episodesSnap.forEach((docSnap) => {
+          batch.delete(docSnap.ref);
+        });
+        await batch.commit();
+      } catch (err) {
+        console.warn('Error clearing user documents in Firestore:', err);
+      }
     }
   };
 

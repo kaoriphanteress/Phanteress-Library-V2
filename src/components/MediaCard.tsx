@@ -18,6 +18,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({ item, onSelect }) => {
   const mediaType = item.media_type || (item.title ? 'movie' : 'tv');
   const rating = item.vote_average ? item.vote_average.toFixed(1) : null;
   const posterUrl = getImageUrl(item.poster_path, 'w500');
+  const [imgError, setImgError] = React.useState(false);
 
   const libItem = library.find(
     (l) => l.tmdbId === item.id && (l.mediaType === mediaType || !l.mediaType)
@@ -69,18 +70,22 @@ export const MediaCard: React.FC<MediaCardProps> = ({ item, onSelect }) => {
     >
       {/* Poster Media Box with 2:3 Aspect Ratio */}
       <div className="relative aspect-[2/3] w-full bg-zinc-950 overflow-hidden">
-        {posterUrl ? (
+        {posterUrl && !imgError ? (
           <img
             src={posterUrl}
             alt={title}
             loading="lazy"
             referrerPolicy="no-referrer"
+            onError={() => setImgError(true)}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-br from-zinc-900 to-[#120f18] text-zinc-600 text-center">
-            <Film className="w-10 h-10 mb-2 text-zinc-700 group-hover:text-[#ff2a85] transition-colors" />
-            <span className="text-xs font-medium text-zinc-400 line-clamp-2">{title}</span>
+          <div className="w-full h-full flex flex-col items-center justify-center p-3 bg-gradient-to-br from-zinc-900 via-[#180e18] to-zinc-950 text-zinc-500 text-center relative">
+            <div className="w-10 h-10 rounded-xl bg-zinc-800/80 border border-zinc-750 flex items-center justify-center mb-2 text-[#ff2a85] group-hover:scale-110 transition-transform">
+              <Film className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-bold text-zinc-200 line-clamp-2 px-1">{title}</span>
+            {year && <span className="text-[10px] text-zinc-500 mt-1">{year}</span>}
           </div>
         )}
 

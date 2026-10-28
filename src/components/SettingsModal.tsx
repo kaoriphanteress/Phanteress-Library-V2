@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   X,
   LogIn,
@@ -12,10 +12,171 @@ import {
   Sparkles,
   Database,
   Check,
-  Heart
+  Heart,
+  Trash2,
+  AlertTriangle,
+  RotateCcw,
+  CheckCircle2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLibrary } from '../context/LibraryContext';
+
+interface HoldToResetButtonProps {
+  onReset: () => Promise<void> | void;
+}
+
+const HoldToResetButton: React.FC<HoldToResetButtonProps> = ({ onReset }) => {
+  const [progress, setProgress] = useState(0);
+  const [isHolding, setIsHolding] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [justReset, setJustReset] = useState(false);
+
+  const frameRef = useRef<number | null>(null);
+  const startTimeRef = useRef<number>(0);
+  const HOLD_DURATION = 2000; // 2.0 seconds
+
+  const cancelHold = useCallback(() => {
+    if (frameRef.current) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    setIsHolding(false);
+    setProgress(0);
+  }, []);
+
+  const startHold = useCallback(
+    (e: React.SyntheticEvent) => {
+      if (isResetting || justReset) return;
+      setIsHolding(true);
+      startTimeRef.current = Date.now();
+
+      try {
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          navigator.vibrate(30);
+        }
+      } catch {}
+
+      const step = () => {
+        const elapsed = Date.now() - startTimeRef.current;
+        const pct = Math.min(100, (elapsed / HOLD_DURATION) * 100);
+        setProgress(pct);
+
+        if (pct < 100) {
+          frameRef.current = requestAnimationFrame(step);
+        } else {
+          frameRef.current = null;
+          setIsHolding(false);
+          setIsResetting(true);
+          try {
+            if (typeof navigator !== 'undefined' && navigator.vibrate) {
+              navigator.vibrate([60, 40, 100]);
+            }
+          } catch {}
+
+          Promise.resolve(onReset()).finally(() => {
+            setIsResetting(false);
+            setJustReset(true);
+            setProgress(0);
+            setTimeout(() => {
+              setJustReset(false);
+            }, 4000);
+          });
+        }
+      };
+
+      frameRef.current = requestAnimationFrame(step);
+    },
+    [isResetting, justReset, onReset]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (frameRef.current) cancelAnimationFrame(frameRef.current);
+    };
+  }, []);
+
+  return (
+    <div className="space-y-2 select-none">
+      <div
+        role="button"
+        tabIndex={0}
+        onMouseDown={startHold}
+        onMouseUp={cancelHold}
+        onMouseLeave={cancelHold}
+        onTouchStart={startHold}
+        onTouchEnd={cancelHold}
+        onTouchCancel={cancelHold}
+        onContextMenu={(e) => e.preventDefault()}
+        className={`relative overflow-hidden w-full py-3 px-4 rounded-xl border font-medium text-xs transition-all duration-200 cursor-pointer flex items-center justify-center gap-2 select-none ${
+          justReset
+            ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.3)]'
+            : isHolding
+            ? 'border-[#ff2a85] bg-red-950/40 text-white scale-[0.98] shadow-[0_0_25px_rgba(255,42,133,0.45)]'
+            : isResetting
+            ? 'border-amber-500/50 bg-amber-500/10 text-amber-300 animate-pulse'
+            : 'border-red-500/30 bg-red-500/10 hover:bg-red-500/15 text-red-400 hover:border-red-500/50'
+        }`}
+      >
+        {/* Animated Fill Bar while holding */}
+        <div
+          className="absolute inset-y-0 left-0 bg-gradient-to-r from-red-600 via-[#ff2a85] to-rose-500 transition-[width] ease-linear pointer-events-none"
+          style={{
+            width: `${progress}%`,
+            opacity: isHolding ? 0.85 : 0,
+            transitionDuration: isHolding ? '50ms' : '200ms',
+          }}
+        />
+
+        {/* Content */}
+        <div className="relative z-10 flex items-center justify-between w-full">
+          <div className="flex items-center gap-2 font-semibold">
+            {justReset ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            ) : isResetting ? (
+              <RotateCcw className="w-4 h-4 animate-spin text-amber-300" />
+            ) : isHolding ? (
+              <AlertTriangle className="w-4 h-4 text-[#ff2a85] animate-pulse" />
+            ) : (
+              <Trash2 className="w-4 h-4 text-red-400" />
+            )}
+
+            <span>
+              {justReset
+                ? 'Library Reset Complete!'
+                : isResetting
+                ? 'Purging Library & Cloud Data...'
+                : isHolding
+                ? `Hold to Reset... ${Math.round(progress)}%`
+                : 'Hold to Reset Library'}
+            </span>
+          </div>
+
+          <span
+            className={`text-[10px] px-2 py-0.5 rounded-full font-mono transition-colors ${
+              justReset
+                ? 'bg-emerald-500/30 text-emerald-200'
+                : isHolding
+                ? 'bg-black/50 text-white font-bold'
+                : 'bg-red-500/20 text-red-300'
+            }`}
+          >
+            {justReset
+              ? 'Done'
+              : isHolding
+              ? `${((HOLD_DURATION - (progress / 100) * HOLD_DURATION) / 1000).toFixed(1)}s`
+              : 'Hold 2s'}
+          </span>
+        </div>
+      </div>
+
+      <p className="text-[11px] text-zinc-500 text-center px-1">
+        {justReset
+          ? '✓ All tracked titles, watched episodes, and custom lists were cleared.'
+          : 'Press & hold the button for 2 seconds to wipe all titles, progress, and lists.'}
+      </p>
+    </div>
+  );
+};
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -117,7 +278,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               <Database className="w-4 h-4 text-[#ff2a85]" />
               <span>Storage & Library Status</span>
             </h3>
-            <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="grid grid-cols-2 gap-3 text-xs mb-3">
               <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-850">
                 <p className="text-zinc-500 text-[11px]">Tracked Titles</p>
                 <p className="text-lg font-bold text-white font-mono mt-0.5">{library.length}</p>
@@ -127,18 +288,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 <p className="text-lg font-bold text-[#ff2a85] font-mono mt-0.5">{episodes.filter(e => e.watched).length}</p>
               </div>
             </div>
-            <div className="mt-2.5">
-              <button
-                onClick={() => {
-                  if (window.confirm('Are you sure you want to reset and clear all titles, progress, and custom lists?')) {
-                    clearAllData();
-                  }
-                }}
-                className="w-full py-2 px-3 rounded-xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-medium transition-colors cursor-pointer flex items-center justify-center gap-2"
-              >
-                <span>Reset All Progress & Titles</span>
-              </button>
-            </div>
+            
+            <HoldToResetButton onReset={clearAllData} />
           </div>
 
           {/* Section 3: Credits & TMDB Attribution (Requested by User) */}
@@ -155,9 +306,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               <p className="text-zinc-400 text-[11px] leading-relaxed">
                 This application uses TMDB and the TMDB APIs to retrieve high-resolution posters, backdrops, cast information, synopsis, and episode schedules.
               </p>
-              <div className="p-2.5 rounded-lg bg-[#0a0a10] border border-zinc-800 text-[10px] text-zinc-500 font-mono">
-                "This product uses the TMDB API but is not endorsed or certified by TMDB."
-              </div>
             </div>
           </div>
 
@@ -184,13 +332,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             </div>
           </div>
 
-          {/* Section 5: About & Install Guidance */}
-          <div className="pt-2 border-t border-zinc-900 text-center text-xs text-zinc-500 space-y-1">
-            <p className="font-semibold text-zinc-400">Phanteress Library v2.0</p>
-            <p className="text-[11px]">Inspired by Showly · Black & Pink Edition</p>
-            <p className="text-[10px] text-zinc-600 pt-1">
-              Tip: Tap "Add to Home Screen" in your browser menu to install this as a native app on your phone!
-            </p>
+          {/* Section 5: About */}
+          <div className="pt-4 border-t border-zinc-900 text-center text-xs text-zinc-500">
+            <div className="flex items-center justify-center gap-3">
+              <img
+                src="/logo.png"
+                alt="Phanteress Library"
+                className="w-9 h-9 rounded-xl object-cover shadow-[0_0_15px_rgba(255,42,133,0.4)] border border-[#ff2a85]/40"
+              />
+              <div className="text-left">
+                <p className="font-bold text-white text-sm">Phanteress Library</p>
+                <p className="text-[11px] text-zinc-400">Inspired by Showly</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
