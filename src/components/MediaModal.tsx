@@ -6,21 +6,52 @@ import {
   Check,
   Heart,
   Play,
-  Calendar,
   Clock,
   Tv,
   Film,
   Sparkles,
-  MessageSquare,
-  CheckCircle2,
-  Circle,
   Layers,
   Lock,
-  Plus
+  CheckCircle2,
+  Circle
 } from 'lucide-react';
 import { TMDBItem, TMDBSeasonDetail, WatchStatus } from '../types/tmdb';
 import { getDetails, getImageUrl, getTVSeasonDetails } from '../services/tmdb';
 import { useLibrary } from '../context/LibraryContext';
+
+// In-memory cache for details to eliminate modal opening lag
+const detailsCache = new Map<string, TMDBItem>();
+
+// Helper to reliably find a Marvel Order item ID
+const getMarvelIdFromItem = (itemData: TMDBItem | null, currentTitle: string, tmdbId?: number): string | null => {
+  if (!itemData) return null;
+  const explicit = (itemData as any).orderItemId || (itemData as any).marvelId || (itemData as any).orderItem?.id;
+  if (explicit) return explicit;
+
+  const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const tNorm = norm(currentTitle);
+  if (!tNorm) return null;
+
+  try {
+    const stored = localStorage.getItem('phanteress_marvel_items_v1');
+    if (stored) {
+      const items: any[] = JSON.parse(stored);
+      // 1. Check exact tmdbId match
+      if (tmdbId) {
+        const idMatch = items.find((m) => m.tmdbId === tmdbId);
+        if (idMatch) return idMatch.id;
+      }
+      // 2. Check normalized title match
+      const titleMatch = items.find((m) => {
+        const mNorm = norm(m.title);
+        return mNorm === tNorm || mNorm.includes(tNorm) || tNorm.includes(mNorm);
+      });
+      if (titleMatch) return titleMatch.id;
+    }
+  } catch {}
+
+  return null;
+};
 
 interface MediaModalProps {
   item: TMDBItem | null;
@@ -31,14 +62,11 @@ interface MediaModalProps {
 export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectRelated }) => {
   const {
     library,
-    episodes,
     customLists,
     createCustomList,
     toggleItemInCustomList,
     isItemInCustomList,
     toggleWatchlist,
-    toggleWatched,
-    toggleAddToShows,
     toggleFavoriteItem,
     addToLibrary,
     updateStatus,
@@ -49,8 +77,14 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
     getShowWatchedCount
   } = useLibrary();
 
-  const [details, setDetails] = useState<TMDBItem | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [details, setDetails] = useState<TMDBItem | null>(() => {
+    if (!item) return null;
+    const type = item.media_type || (item.title ? 'movie' : 'tv');
+    const cacheKey = `${type}_${item.id}`;
+    return detailsCache.get(cacheKey) || null;
+  });
+
+  const [loading, setLoading] = useState(false);
   const [activeSeason, setActiveSeason] = useState(1);
   const [seasonDetail, setSeasonDetail] = useState<TMDBSeasonDetail | null>(null);
   const [seasonLoading, setSeasonLoading] = useState(false);
@@ -85,7 +119,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
     };
   }, []);
 
-  // Fetch full details whenever item changes
+  // Fetch full details whenever item changes (cached to eliminate lag)
   useEffect(() => {
     if (!item) {
       setDetails(null);
@@ -93,14 +127,22 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
     }
 
     let isMounted = true;
-    setLoading(true);
     setShowTrailer(false);
 
     const type = item.media_type || (item.title ? 'movie' : 'tv');
+    const cacheKey = `${type}_${item.id}`;
+
+    if (detailsCache.has(cacheKey)) {
+      setDetails(detailsCache.get(cacheKey)!);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
 
     getDetails(item.id, type)
       .then((data) => {
         if (!isMounted) return;
+        detailsCache.set(cacheKey, data);
         setDetails(data);
         setLoading(false);
         if (type === 'tv') {
@@ -157,16 +199,25 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
   const title = currentData?.title || currentData?.name || 'Untitled';
   const mediaType = currentData?.media_type || (currentData?.title ? 'movie' : 'tv');
 
+  const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
   const isMarvelWatched = useMemo(() => {
     if (!orderWatchedIds.length || !item) return false;
-    const cleanCurrentTitle = title.toLowerCase().trim();
+    const targetMarvelId = getMarvelIdFromItem(item, title, currentData?.id);
+    if (targetMarvelId && orderWatchedIds.includes(targetMarvelId)) {
+      return true;
+    }
+    const currentNorm = norm(title);
+    if (!currentNorm) return false;
+
     return orderWatchedIds.some((id) => {
-      const cleanId = id.replace(/_/g, ' ').replace(/-/g, ' ').toLowerCase().trim();
+      const normId = norm(id);
+      const normIdNoYear = normId.replace(/\d{4}$/, '');
       return (
-        cleanId === cleanCurrentTitle ||
-        cleanCurrentTitle.includes(cleanId) ||
-        cleanId.includes(cleanCurrentTitle) ||
-        (currentData?.id && id.includes(currentData.id.toString()))
+        normId === currentNorm ||
+        normIdNoYear === currentNorm ||
+        (normIdNoYear.length >= 5 && currentNorm.includes(normIdNoYear)) ||
+        (currentNorm.length >= 5 && normIdNoYear.includes(currentNorm))
       );
     });
   }, [orderWatchedIds, title, item, currentData?.id]);
@@ -182,7 +233,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
 
   const libItem = library.find(
     (l) =>
-      (l.tmdbId === currentData.id || (l.title && l.title.toLowerCase().trim() === title.toLowerCase().trim())) &&
+      (l.tmdbId === currentData.id || (l.title && norm(l.title) === norm(title))) &&
       (l.mediaType === mediaType || !l.mediaType || mediaType === "movie" || mediaType === "tv")
   );
 
@@ -208,9 +259,10 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
       }
 
       // Also ensure any matching library entries by id or title are un-watched
+      const currentNorm = norm(title);
       const matches = library.filter(
         (l) =>
-          (l.tmdbId === currentData.id || (l.title && l.title.toLowerCase().trim() === title.toLowerCase().trim())) &&
+          (l.tmdbId === currentData.id || (l.title && norm(l.title) === currentNorm)) &&
           l.status === 'watched'
       );
       for (const m of matches) {
@@ -231,14 +283,16 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
         const stored = localStorage.getItem('phanteress_marvel_watched_v1');
         if (stored) {
           const ids: string[] = JSON.parse(stored);
-          const cleanCurrentTitle = title.toLowerCase().trim();
+          const targetMarvelId = getMarvelIdFromItem(item, title, currentData?.id);
           const nextIds = ids.filter((id) => {
-            const cleanId = id.replace(/_/g, ' ').replace(/-/g, ' ').toLowerCase().trim();
+            if (targetMarvelId && id === targetMarvelId) return false;
+            const normId = norm(id);
+            const normIdNoYear = normId.replace(/\d{4}$/, '');
             const match =
-              cleanId === cleanCurrentTitle ||
-              cleanCurrentTitle.includes(cleanId) ||
-              cleanId.includes(cleanCurrentTitle) ||
-              (currentData.id && id.includes(currentData.id.toString()));
+              normId === currentNorm ||
+              normIdNoYear === currentNorm ||
+              (normIdNoYear.length >= 5 && currentNorm.includes(normIdNoYear)) ||
+              (currentNorm.length >= 5 && normIdNoYear.includes(currentNorm));
             return !match;
           });
           localStorage.setItem('phanteress_marvel_watched_v1', JSON.stringify(nextIds));
@@ -267,28 +321,15 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
 
       // If matches Marvel Order, add to marvelWatched
       try {
-        const storedItems = localStorage.getItem('phanteress_marvel_items_v1');
         const storedWatched = localStorage.getItem('phanteress_marvel_watched_v1');
-        const cleanCurrentTitle = title.toLowerCase().trim();
-        let targetId = '';
+        const currentIds: string[] = storedWatched ? JSON.parse(storedWatched) : [];
+        const targetMarvelId = getMarvelIdFromItem(item, title, currentData?.id) || `${norm(title)}_${year || 'title'}`;
 
-        if (storedItems) {
-          const mItems: any[] = JSON.parse(storedItems);
-          const match = mItems.find((m) => {
-            const mTitle = (m.title || '').toLowerCase().trim();
-            return mTitle === cleanCurrentTitle || cleanCurrentTitle.includes(mTitle) || mTitle.includes(cleanCurrentTitle);
-          });
-          if (match) targetId = match.id;
-        }
-
-        if (targetId) {
-          const currentIds: string[] = storedWatched ? JSON.parse(storedWatched) : [];
-          if (!currentIds.includes(targetId)) {
-            const nextIds = [...currentIds, targetId];
-            localStorage.setItem('phanteress_marvel_watched_v1', JSON.stringify(nextIds));
-            setOrderWatchedIds(nextIds);
-            window.dispatchEvent(new CustomEvent('phanteress_marvel_order_changed', { detail: { watched: nextIds } }));
-          }
+        if (!currentIds.includes(targetMarvelId)) {
+          const nextIds = [...currentIds, targetMarvelId];
+          localStorage.setItem('phanteress_marvel_watched_v1', JSON.stringify(nextIds));
+          setOrderWatchedIds(nextIds);
+          window.dispatchEvent(new CustomEvent('phanteress_marvel_order_changed', { detail: { watched: nextIds } }));
         }
       } catch (err) {
         console.warn('Error marking marvel watched:', err);
@@ -305,14 +346,6 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
   const watchedEps = mediaType === 'tv' ? getShowWatchedCount(currentData.id) : 0;
   const totalEps = currentData.number_of_episodes || libItem?.totalEpisodes || seasonDetail?.episodes?.length || 0;
   const progressPercent = totalEps > 0 ? Math.min(100, Math.round((watchedEps / totalEps) * 100)) : 0;
-
-  const handleStatusChange = (status: WatchStatus) => {
-    if (libItem) {
-      updateStatus(libItem.id, status);
-    } else {
-      addToLibrary(currentData, status);
-    }
-  };
 
   const handleReviewSave = () => {
     if (libItem) {
@@ -337,40 +370,43 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
-      {/* Backdrop Dimmer */}
-      <div
-        className="fixed inset-0 bg-black/85 backdrop-blur-md transition-opacity"
-        onClick={onClose}
-      />
-
-      {/* Modal Dialog Card */}
-      <div className="relative w-full max-w-4xl max-h-[92vh] bg-[#0c0c12] border border-zinc-800 rounded-2xl shadow-[0_25px_60px_rgba(0,0,0,0.95)] overflow-y-auto z-10 no-scrollbar">
-        {/* Close Button */}
+    <div className="fixed inset-0 z-50 w-full h-full bg-[#060609] overflow-y-auto no-scrollbar flex flex-col">
+      {/* Sticky Top Header Bar - Full Screen & Mobile-friendly */}
+      <div className="sticky top-0 z-40 w-full flex items-center justify-between px-4 py-3 bg-[#060609]/95 backdrop-blur-md border-b border-zinc-800/80">
+        <div className="flex items-center gap-2 min-w-0 pr-3">
+          <span className="text-[11px] font-bold text-[#ff2a85] uppercase tracking-wider shrink-0">
+            {mediaType === 'tv' ? 'Series' : 'Movie'}
+          </span>
+          <span className="text-zinc-600 text-xs">/</span>
+          <h3 className="text-xs sm:text-sm font-semibold text-white truncate">{title}</h3>
+        </div>
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-30 p-2 rounded-full bg-black/70 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-          title="Close modal"
+          className="p-1.5 sm:p-2 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer shrink-0"
+          title="Close details"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4 sm:w-5 sm:h-5" />
         </button>
+      </div>
 
-        {/* Modal Header / Backdrop Banner */}
-        <div className="relative h-64 sm:h-80 w-full bg-zinc-950 overflow-hidden">
+      {/* Main Full-Width Content Container */}
+      <div className="w-full max-w-5xl mx-auto flex-1 pb-16">
+        {/* Backdrop Banner */}
+        <div className="relative h-60 sm:h-80 md:h-96 w-full bg-zinc-950 overflow-hidden">
           {backdropUrl ? (
             <img
               src={backdropUrl}
               alt={title}
               referrerPolicy="no-referrer"
-              className="w-full h-full object-cover object-center opacity-45"
+              className="w-full h-full object-cover object-center opacity-50"
             />
           ) : (
             <div className="w-full h-full bg-gradient-to-r from-zinc-950 via-[#190a16] to-zinc-950" />
           )}
 
           {/* Scrims */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0c0c12] via-[#0c0c12]/60 to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#0c0c12] via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#060609] via-[#060609]/60 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#060609] via-transparent to-transparent" />
 
           {/* Trailer Button Overlay if available */}
           {trailerVideo && !showTrailer && (
@@ -404,10 +440,10 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
         </div>
 
         {/* Modal Main Content */}
-        <div className="px-5 sm:px-8 pb-8 -mt-24 sm:-mt-28 relative z-20">
-          <div className="flex flex-col sm:flex-row gap-6 items-start">
+        <div className="px-4 sm:px-8 pb-8 -mt-20 sm:-mt-24 relative z-20">
+          <div className="flex flex-col sm:flex-row gap-5 items-start">
             {/* Poster Thumbnail */}
-            <div className="w-32 sm:w-44 aspect-[2/3] shrink-0 rounded-xl overflow-hidden bg-zinc-900 border-2 border-zinc-800 shadow-[0_10px_30px_rgba(0,0,0,0.8)]">
+            <div className="w-28 sm:w-44 aspect-[2/3] shrink-0 rounded-xl overflow-hidden bg-zinc-900 border-2 border-zinc-800 shadow-[0_10px_30px_rgba(0,0,0,0.8)]">
               {posterUrl ? (
                 <img
                   src={posterUrl}
@@ -423,8 +459,8 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
             </div>
 
             {/* Header Titles & Specs */}
-            <div className="flex-1 pt-2">
-              <div className="flex items-center gap-2 text-xs text-zinc-400 mb-1">
+            <div className="flex-1 min-w-0 pt-1">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400 mb-1">
                 <span className="text-[#ff2a85] font-semibold uppercase tracking-wider text-xs">
                   {mediaType === 'tv' ? 'TV Series' : 'Movie'}
                 </span>
@@ -447,7 +483,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
                 )}
               </div>
 
-              <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mb-2">
+              <h2 className="text-xl sm:text-3xl font-bold text-white tracking-tight mb-2">
                 {title}
               </h2>
 
@@ -458,7 +494,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
               )}
 
               {/* Rating & Genres */}
-              <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-300 mb-4">
+              <div className="flex flex-wrap items-center gap-2.5 text-xs text-zinc-300 mb-4">
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-900/90 border border-zinc-800">
                   <Star className="w-3.5 h-3.5 text-[#ff2a85] fill-[#ff2a85]" />
                   <span className="font-bold text-white font-mono tabular-nums">{rating}</span>
@@ -466,7 +502,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
                 </div>
 
                 {currentData.genres && currentData.genres.length > 0 && (
-                  <div className="flex items-center gap-1.5 text-zinc-400">
+                  <div className="flex flex-wrap items-center gap-1.5 text-zinc-400 text-xs">
                     {currentData.genres.map((g, idx) => (
                       <span key={g.id}>
                         {g.name}
@@ -477,28 +513,28 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
                 )}
               </div>
 
-              {/* Phanteress Action Buttons (Movie vs Show) */}
-              <div className="pt-1 pb-3 space-y-2">
+              {/* Action Buttons: Responsive Grid that ALWAYS fits mobile screens */}
+              <div className="pt-1 pb-3 space-y-2 w-full">
                 {mediaType === 'movie' ? (
-                  /* Movie Row: [Watchlist] [Watched] [♥️] */
-                  <div className="flex items-center gap-2">
+                  /* Movie Row: Responsive grid */
+                  <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full">
                     <button
                       type="button"
                       onClick={() => toggleWatchlist(currentData)}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                      className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer w-full sm:w-auto ${
                         currentStatus === 'watchlist'
                           ? 'bg-[#ff2a85] text-white shadow-[0_0_15px_rgba(255,42,133,0.5)] border border-[#ff2a85]'
                           : 'bg-zinc-900 hover:bg-zinc-850 text-zinc-300 border border-zinc-800'
                       }`}
                     >
                       <Bookmark className="w-3.5 h-3.5" />
-                      <span>Watchlist</span>
+                      <span>{currentStatus === 'watchlist' ? 'In Watchlist' : 'Watchlist'}</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={handleToggleWatched}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                      className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer w-full sm:w-auto ${
                         isCurrentlyWatched
                           ? 'bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)] border border-emerald-400'
                           : 'bg-zinc-900 hover:bg-zinc-850 text-zinc-300 border border-zinc-800'
@@ -506,42 +542,60 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
                       title={isCurrentlyWatched ? 'Click to mark unwatched' : 'Mark as watched'}
                     >
                       <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                      <span>Watched</span>
+                      <span>{isCurrentlyWatched ? 'Watched' : 'Mark Watched'}</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => toggleFavoriteItem(currentData)}
-                      className={`p-2 rounded-xl border text-xs transition-all cursor-pointer ${
+                      className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer w-full sm:w-auto ${
                         isFavorite
                           ? 'bg-rose-600 border-rose-500 text-white shadow-[0_0_15px_rgba(225,29,72,0.5)]'
-                          : 'bg-zinc-900 hover:bg-zinc-850 text-zinc-400 border border-zinc-800'
+                          : 'bg-zinc-900 hover:bg-zinc-850 text-zinc-300 border border-zinc-800'
                       }`}
                       title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                     >
-                      <Heart className={`w-4 h-4 ${isFavorite ? 'fill-white' : ''}`} />
+                      <Heart className={`w-3.5 h-3.5 ${isFavorite ? 'fill-white' : ''}`} />
+                      <span>{isFavorite ? 'Favorited' : 'Favorite'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setManageListOpen(true)}
+                      className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-300 hover:text-white text-xs font-semibold transition-all cursor-pointer w-full sm:w-auto"
+                    >
+                      <Layers className="w-3.5 h-3.5 text-[#ff2a85]" />
+                      <span>Lists</span>
                     </button>
                   </div>
                 ) : (
-                  /* Show Row: [Add To Shows] [Watched] [Watchlist] [♥️] */
-                  <div className="flex items-center gap-2">
+                  /* Show Row: Responsive grid */
+                  <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full">
                     <button
                       type="button"
-                      onClick={() => toggleAddToShows(currentData)}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                      onClick={() => {
+                        if (currentStatus === 'watching') {
+                          updateStatus(libItem!.id, 'watchlist');
+                        } else if (libItem) {
+                          updateStatus(libItem.id, 'watching');
+                        } else {
+                          addToLibrary(currentData, 'watching');
+                        }
+                      }}
+                      className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer w-full sm:w-auto ${
                         currentStatus === 'watching'
                           ? 'bg-[#ff2a85] text-white shadow-[0_0_15px_rgba(255,42,133,0.5)] border border-[#ff2a85]'
                           : 'bg-zinc-900 hover:bg-zinc-850 text-zinc-300 border border-zinc-800'
                       }`}
                     >
                       <Tv className="w-3.5 h-3.5" />
-                      <span>Add To Shows</span>
+                      <span>{currentStatus === 'watching' ? 'In Shows' : 'Add To Shows'}</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={handleToggleWatched}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                      className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer w-full sm:w-auto ${
                         isCurrentlyWatched
                           ? 'bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)] border border-emerald-400'
                           : 'bg-zinc-900 hover:bg-zinc-850 text-zinc-300 border border-zinc-800'
@@ -549,47 +603,46 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
                       title={isCurrentlyWatched ? 'Click to mark unwatched' : 'Mark as watched'}
                     >
                       <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                      <span>Watched</span>
+                      <span>{isCurrentlyWatched ? 'Watched' : 'Mark Watched'}</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => toggleWatchlist(currentData)}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                      className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer w-full sm:w-auto ${
                         currentStatus === 'watchlist'
                           ? 'bg-[#ff2a85] text-white shadow-[0_0_15px_rgba(255,42,133,0.5)] border border-[#ff2a85]'
                           : 'bg-zinc-900 hover:bg-zinc-850 text-zinc-300 border border-zinc-800'
                       }`}
                     >
                       <Bookmark className="w-3.5 h-3.5" />
-                      <span>Watchlist</span>
+                      <span>{currentStatus === 'watchlist' ? 'In Watchlist' : 'Watchlist'}</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => toggleFavoriteItem(currentData)}
-                      className={`p-2 rounded-xl border text-xs transition-all cursor-pointer ${
+                      className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer w-full sm:w-auto ${
                         isFavorite
                           ? 'bg-rose-600 border-rose-500 text-white shadow-[0_0_15px_rgba(225,29,72,0.5)]'
-                          : 'bg-zinc-900 hover:bg-zinc-850 text-zinc-400 border border-zinc-800'
+                          : 'bg-zinc-900 hover:bg-zinc-850 text-zinc-300 border border-zinc-800'
                       }`}
                       title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                     >
-                      <Heart className={`w-4 h-4 ${isFavorite ? 'fill-white' : ''}`} />
+                      <Heart className={`w-3.5 h-3.5 ${isFavorite ? 'fill-white' : ''}`} />
+                      <span>{isFavorite ? 'Favorited' : 'Favorite'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setManageListOpen(true)}
+                      className="col-span-2 sm:col-auto flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-300 hover:text-white text-xs font-semibold transition-all cursor-pointer w-full sm:w-auto"
+                    >
+                      <Layers className="w-3.5 h-3.5 text-[#ff2a85]" />
+                      <span>Lists</span>
                     </button>
                   </div>
                 )}
-
-                {/* Manage Lists Button on bottom of status row */}
-                <div>
-                  <button
-                    onClick={() => setManageListOpen(true)}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 hover:border-[#ff2a85]/40 text-zinc-300 hover:text-white text-xs font-semibold transition-all cursor-pointer"
-                  >
-                    <Layers className="w-3.5 h-3.5 text-[#ff2a85]" />
-                    <span>Manage Lists</span>
-                  </button>
-                </div>
               </div>
 
               {/* TV Progress Bar */}
@@ -615,7 +668,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
           {/* Overview Section */}
           <div className="mt-6 pt-5 border-t border-zinc-900">
             <h3 className="text-sm font-semibold text-white mb-2">Overview</h3>
-            <p className="text-zinc-300 text-sm leading-relaxed">
+            <p className="text-zinc-300 text-xs sm:text-sm leading-relaxed">
               {currentData.overview || 'No synopsis available for this title.'}
             </p>
           </div>

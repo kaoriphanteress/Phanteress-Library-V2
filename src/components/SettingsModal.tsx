@@ -3,20 +3,19 @@ import {
   X,
   LogIn,
   LogOut,
-  ShieldCheck,
   Cloud,
   Film,
   Info,
   Sliders,
   ExternalLink,
-  Sparkles,
   Database,
-  Check,
   Heart,
   Trash2,
   AlertTriangle,
   RotateCcw,
-  CheckCircle2
+  CheckCircle2,
+  UserCheck,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLibrary } from '../context/LibraryContext';
@@ -184,166 +183,199 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
-  const { user, signInWithGoogle, logout } = useAuth();
+  const { user, signInWithGoogle, signInAsGuest, signingIn, authError, clearAuthError, logout } = useAuth();
   const { library, episodes, clearAllData } = useLibrary();
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/85 backdrop-blur-md transition-opacity"
-        onClick={onClose}
-      />
-
-      {/* Settings Modal Sheet */}
-      <div className="relative w-full max-w-lg bg-[#0e0e16] border border-zinc-800 rounded-2xl shadow-[0_25px_60px_rgba(0,0,0,0.9)] overflow-hidden z-10 my-8">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-[#09090f]">
-          <h2 className="text-lg font-bold text-white tracking-tight">Settings</h2>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+    <div className="fixed inset-0 z-50 w-full h-full bg-[#060609] overflow-y-auto no-scrollbar flex flex-col">
+      {/* Sticky Top Header Bar - Full Screen & Mobile Friendly */}
+      <div className="sticky top-0 z-40 w-full flex items-center justify-between px-4 sm:px-6 py-3.5 bg-[#09090f]/95 backdrop-blur-md border-b border-zinc-800">
+        <div className="flex items-center gap-2">
+          <Sliders className="w-4 h-4 text-[#ff2a85]" />
+          <h2 className="text-base font-bold text-white tracking-tight">Settings</h2>
         </div>
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+          title="Close Settings"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
 
-        {/* Settings Body */}
-        <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto no-scrollbar">
-          {/* Section 1: Account & Google Cloud Sync */}
-          <div>
-            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <Cloud className="w-4 h-4 text-[#ff2a85]" />
-              <span>Account & Cloud Sync</span>
-            </h3>
+      {/* Settings Body Container */}
+      <div className="w-full max-w-2xl mx-auto p-4 sm:p-6 space-y-6 flex-1 pb-16">
+        {/* Section 1: Account & Cloud Sync */}
+        <div>
+          <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Cloud className="w-4 h-4 text-[#ff2a85]" />
+            <span>Account & Cloud Sync</span>
+          </h3>
 
-            {user ? (
-              <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800/80">
-                <div className="flex items-center gap-3.5 mb-3">
-                  {user.photoURL ? (
-                    <img
-                      src={user.photoURL}
-                      alt={user.displayName || 'User'}
-                      referrerPolicy="no-referrer"
-                      className="w-11 h-11 rounded-full border-2 border-[#ff2a85] object-cover"
-                    />
-                  ) : (
-                    <div className="w-11 h-11 rounded-full bg-[#ff2a85]/20 text-[#ff2a85] flex items-center justify-center font-bold text-sm">
-                      {user.displayName?.charAt(0) || 'U'}
-                    </div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-white truncate">
-                      {user.displayName || 'Showty User'}
-                    </p>
-                    <p className="text-xs text-zinc-400 truncate">{user.email}</p>
-                    <div className="flex items-center gap-1.5 mt-1 text-[11px] text-emerald-400 font-medium">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      <span>Firebase Cloud Sync Active</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-zinc-900 flex justify-end">
-                  <button
-                    onClick={logout}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors cursor-pointer"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Sign Out</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800/80 text-center">
-                <p className="text-xs text-zinc-300 mb-3 leading-relaxed">
-                  Sign in with Google to synchronize your watchlist, episode progress, and custom lists across all your devices via Firebase.
-                </p>
+          {/* Diagnostic Error Banner if Google Auth encountered domain/popup barrier */}
+          {authError && (
+            <div className="p-3.5 mb-3 rounded-xl bg-red-950/40 border border-red-500/40 text-red-200 text-xs flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-white">Sign In Notice</p>
+                <p className="mt-0.5 text-[11px] text-zinc-300 leading-relaxed">{authError}</p>
                 <button
-                  onClick={signInWithGoogle}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#ff2a85] to-[#f43f5e] hover:from-[#ff3a95] hover:to-[#f54f6e] text-white text-xs font-semibold shadow-[0_0_15px_rgba(255,42,133,0.35)] transition-all cursor-pointer"
+                  onClick={clearAuthError}
+                  className="mt-2 text-[10px] text-zinc-400 hover:text-white underline cursor-pointer"
                 >
-                  <LogIn className="w-4 h-4" />
-                  <span>Sign In with Google</span>
+                  Dismiss notice
                 </button>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Section 2: Data & Storage */}
-          <div>
-            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <Database className="w-4 h-4 text-[#ff2a85]" />
-              <span>Storage & Library Status</span>
-            </h3>
-            <div className="grid grid-cols-2 gap-3 text-xs mb-3">
-              <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-850">
-                <p className="text-zinc-500 text-[11px]">Tracked Titles</p>
-                <p className="text-lg font-bold text-white font-mono mt-0.5">{library.length}</p>
+          {user ? (
+            <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800/80">
+              <div className="flex items-center gap-3.5 mb-3">
+                {user.photoURL ? (
+                  <img
+                    src={user.photoURL}
+                    alt={user.displayName || 'User'}
+                    referrerPolicy="no-referrer"
+                    className="w-11 h-11 rounded-full border-2 border-[#ff2a85] object-cover"
+                  />
+                ) : (
+                  <div className="w-11 h-11 rounded-full bg-[#ff2a85]/20 text-[#ff2a85] flex items-center justify-center font-bold text-sm">
+                    {user.displayName?.charAt(0) || 'U'}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-white truncate">
+                    {user.displayName || 'Phanteress User'}
+                  </p>
+                  <p className="text-xs text-zinc-400 truncate">{user.email}</p>
+                  <div className="flex items-center gap-1.5 mt-1 text-[11px] text-emerald-400 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>
+                      {(user as any).isAnonymous ? 'Local / Cloud Guest Profile Active' : 'Firebase Cloud Sync Active'}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-850">
-                <p className="text-zinc-500 text-[11px]">Watched Episodes</p>
-                <p className="text-lg font-bold text-[#ff2a85] font-mono mt-0.5">{episodes.filter(e => e.watched).length}</p>
+
+              <div className="pt-3 border-t border-zinc-900 flex justify-end">
+                <button
+                  onClick={logout}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Sign Out</span>
+                </button>
               </div>
             </div>
-            
-            <HoldToResetButton onReset={clearAllData} />
-          </div>
+          ) : (
+            <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800/80 space-y-3">
+              <p className="text-xs text-zinc-300 leading-relaxed">
+                Sign in with Google to synchronize your watchlist, episode progress, and custom lists across all your devices via Firebase.
+              </p>
 
-          {/* Section 3: Credits & TMDB Attribution (Requested by User) */}
-          <div>
-            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <Info className="w-4 h-4 text-[#ff2a85]" />
-              <span>Credits & Attribution</span>
-            </h3>
-            <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-850 text-xs space-y-3">
-              <div className="flex items-center gap-2">
-                <Film className="w-4 h-4 text-[#ff2a85]" />
-                <span className="font-semibold text-white">The Movie Database (TMDB)</span>
+              <div className="flex flex-col sm:flex-row gap-2.5">
+                <button
+                  onClick={signInWithGoogle}
+                  disabled={signingIn}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#ff2a85] to-[#f43f5e] hover:from-[#ff3a95] hover:to-[#f54f6e] text-white text-xs font-semibold shadow-[0_0_15px_rgba(255,42,133,0.35)] transition-all cursor-pointer disabled:opacity-60"
+                >
+                  {signingIn ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <LogIn className="w-4 h-4" />
+                  )}
+                  <span>{signingIn ? 'Connecting...' : 'Sign In with Google'}</span>
+                </button>
+
+                <button
+                  onClick={() => signInAsGuest('Movie Explorer')}
+                  className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-300 hover:text-white text-xs font-medium transition-colors cursor-pointer"
+                  title="Instant sync profile without popup requirements"
+                >
+                  <UserCheck className="w-4 h-4 text-[#ff2a85]" />
+                  <span>Use Guest Profile</span>
+                </button>
               </div>
-              <p className="text-zinc-400 text-[11px] leading-relaxed">
-                This application uses TMDB and the TMDB APIs to retrieve high-resolution posters, backdrops, cast information, synopsis, and episode schedules.
+            </div>
+          )}
+        </div>
+
+        {/* Section 2: Data & Storage */}
+        <div>
+          <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Database className="w-4 h-4 text-[#ff2a85]" />
+            <span>Storage & Library Status</span>
+          </h3>
+          <div className="grid grid-cols-2 gap-3 text-xs mb-3">
+            <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-850">
+              <p className="text-zinc-500 text-[11px]">Tracked Titles</p>
+              <p className="text-lg font-bold text-white font-mono mt-0.5">{library.length}</p>
+            </div>
+            <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-850">
+              <p className="text-zinc-500 text-[11px]">Watched Episodes</p>
+              <p className="text-lg font-bold text-[#ff2a85] font-mono mt-0.5">
+                {episodes.filter((e) => e.watched).length}
               </p>
             </div>
           </div>
 
-          {/* Section 4: Treat Me (Requested PayPal Me Integration) */}
-          <div>
-            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <Heart className="w-4 h-4 text-[#ff2a85] fill-[#ff2a85]/40" />
-              <span>Treat Me</span>
-            </h3>
-            <div className="p-4 rounded-xl bg-gradient-to-br from-[#160d18] to-zinc-950 border border-[#ff2a85]/30 text-xs space-y-3">
-              <p className="text-zinc-300 text-xs leading-relaxed">
-                Enjoying Phanteress Library? Support the app and future updates with a treat!
-              </p>
-              <a
-                href="https://www.paypal.me/IanLenard759"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#ff2a85] to-[#f43f5e] hover:from-[#ff3a95] hover:to-[#f54f6e] text-white text-xs font-semibold shadow-[0_0_15px_rgba(255,42,133,0.35)] transition-all cursor-pointer"
-              >
-                <Heart className="w-4 h-4 fill-white" />
-                <span>Treat Me on PayPal</span>
-                <ExternalLink className="w-3.5 h-3.5 opacity-80" />
-              </a>
-            </div>
-          </div>
+          <HoldToResetButton onReset={clearAllData} />
+        </div>
 
-          {/* Section 5: About */}
-          <div className="pt-4 border-t border-zinc-900 text-center text-xs text-zinc-500">
-            <div className="flex items-center justify-center gap-3">
-              <img
-                src="/logo.png"
-                alt="Phanteress Library"
-                className="w-9 h-9 rounded-xl object-cover shadow-[0_0_15px_rgba(255,42,133,0.4)] border border-[#ff2a85]/40"
-              />
-              <div className="text-left">
-                <p className="font-bold text-white text-sm">Phanteress Library</p>
-                <p className="text-[11px] text-zinc-400">Inspired by Showly</p>
-              </div>
+        {/* Section 3: Credits & TMDB Attribution */}
+        <div>
+          <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Info className="w-4 h-4 text-[#ff2a85]" />
+            <span>Credits & Attribution</span>
+          </h3>
+          <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-850 text-xs space-y-3">
+            <div className="flex items-center gap-2">
+              <Film className="w-4 h-4 text-[#ff2a85]" />
+              <span className="font-semibold text-white">The Movie Database (TMDB)</span>
+            </div>
+            <p className="text-zinc-400 text-[11px] leading-relaxed">
+              This application uses TMDB and the TMDB APIs to retrieve high-resolution posters, backdrops, cast information, synopsis, and episode schedules.
+            </p>
+          </div>
+        </div>
+
+        {/* Section 4: Treat Me */}
+        <div>
+          <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Heart className="w-4 h-4 text-[#ff2a85] fill-[#ff2a85]/40" />
+            <span>Treat Me</span>
+          </h3>
+          <div className="p-4 rounded-xl bg-gradient-to-br from-[#160d18] to-zinc-950 border border-[#ff2a85]/30 text-xs space-y-3">
+            <p className="text-zinc-300 text-xs leading-relaxed">
+              Enjoying Phanteress Library? Support the app and future updates with a treat!
+            </p>
+            <a
+              href="https://www.paypal.me/IanLenard759"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#ff2a85] to-[#f43f5e] hover:from-[#ff3a95] hover:to-[#f54f6e] text-white text-xs font-semibold shadow-[0_0_15px_rgba(255,42,133,0.35)] transition-all cursor-pointer"
+            >
+              <Heart className="w-4 h-4 fill-white" />
+              <span>Treat Me on PayPal</span>
+              <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+            </a>
+          </div>
+        </div>
+
+        {/* Section 5: About */}
+        <div className="pt-4 border-t border-zinc-900 text-center text-xs text-zinc-500">
+          <div className="flex items-center justify-center gap-3">
+            <img
+              src="/logo.png"
+              alt="Phanteress Library"
+              className="w-9 h-9 rounded-xl object-cover shadow-[0_0_15px_rgba(255,42,133,0.4)] border border-[#ff2a85]/40"
+            />
+            <div className="text-left">
+              <p className="font-bold text-white text-sm">Phanteress Library</p>
+              <p className="text-[11px] text-zinc-400">Inspired by Showly</p>
             </div>
           </div>
         </div>

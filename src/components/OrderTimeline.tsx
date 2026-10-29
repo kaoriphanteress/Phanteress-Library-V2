@@ -39,7 +39,7 @@ interface OrderTimelineProps {
   onUpdateFavorites?: (ids: string[]) => void;
   onUpdateConfig: (config: MarvelOrderConfig) => void;
   onOpenWizard?: () => void;
-  onSelectTitle?: (title: string, year?: number) => void;
+  onSelectTitle?: (title: string, year?: number, item?: MarvelItem) => void;
 }
 
 type FilterType = 'all' | 'movie' | 'tv' | 'unwatched' | 'watched' | 'skipped';
@@ -89,6 +89,7 @@ export const OrderTimeline: React.FC<OrderTimelineProps> = ({
 
     onUpdateWatched(nextWatched);
     saveStoredWatchedIds(nextWatched);
+    window.dispatchEvent(new CustomEvent('phanteress_marvel_order_changed', { detail: { watched: nextWatched } }));
     if (nextSkipped.length !== skippedIds.length) {
       onUpdateSkipped(nextSkipped);
       saveStoredSkippedIds(nextSkipped);
@@ -445,7 +446,7 @@ export const OrderTimeline: React.FC<OrderTimelineProps> = ({
     return (
       <div
         key={item.id}
-        onClick={() => onSelectTitle && onSelectTitle(item.title, item.year)}
+        onClick={() => onSelectTitle && onSelectTitle(item.title, item.year, item)}
         className={`p-3 sm:p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 cursor-pointer ${
           isWatched
             ? 'border-emerald-500/30 bg-emerald-950/10'

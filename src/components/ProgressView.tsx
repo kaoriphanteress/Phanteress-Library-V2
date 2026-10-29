@@ -624,19 +624,37 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
                 onOpenWizard={() => {
                   if (onNavigateToOrder) onNavigateToOrder();
                 }}
-                onSelectTitle={async (title, year) => {
+                onSelectTitle={async (title, year, marvelItem) => {
                   try {
                     const results = await searchMulti(title);
                     if (results && results.length > 0) {
-                      let best = results[0];
+                      let best = { ...results[0] };
                       if (year) {
                         const m = results.find((r) => {
                           const d = r.release_date || r.first_air_date;
                           return d && d.startsWith(year.toString());
                         });
-                        if (m) best = m;
+                        if (m) best = { ...m };
+                      }
+                      if (marvelItem) {
+                        (best as any).orderItemId = marvelItem.id;
+                        (best as any).marvelId = marvelItem.id;
+                        (best as any).orderItem = marvelItem;
                       }
                       onSelect(best);
+                    } else if (marvelItem) {
+                      // Fallback if search returns nothing: build TMDBItem from marvelItem
+                      const syntheticItem: any = {
+                        id: marvelItem.tmdbId || Math.abs(marvelItem.id.split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0)),
+                        title: marvelItem.title,
+                        media_type: marvelItem.mediaType === 'tv' ? 'tv' : 'movie',
+                        release_date: `${marvelItem.year}-01-01`,
+                        overview: `Part of the Marvel Cinematic Universe - ${marvelItem.phase}. Featured hero: ${marvelItem.hero}.`,
+                        vote_average: 8.0,
+                        orderItemId: marvelItem.id,
+                        marvelId: marvelItem.id,
+                      };
+                      onSelect(syntheticItem);
                     }
                   } catch (e) {
                     console.warn('TMDB search error for order title:', e);

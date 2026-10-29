@@ -324,10 +324,14 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const toggleWatched = async (item: TMDBItem) => {
     const mediaType: MediaType = item.media_type || (item.title ? 'movie' : 'tv');
     const id = `${mediaType}_${item.id}`;
-    const itemTitle = (item.title || item.name || '').toLowerCase().trim();
+    const rawTitle = item.title || item.name || '';
+    const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const itemTitleNorm = norm(rawTitle);
     const existing = library.find(
-      (i) => i.id === id || i.tmdbId === item.id || (i.title && i.title.toLowerCase().trim() === itemTitle)
+      (i) => i.id === id || i.tmdbId === item.id || (i.title && norm(i.title) === itemTitleNorm)
     );
+
+    const willBeWatched = !(existing && existing.status === 'watched');
 
     if (existing && existing.status === 'watched') {
       // Revert to watchlist (unwatched)
@@ -336,6 +340,50 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
       await updateStatus(existing.id, 'watched');
     } else {
       await addToLibrary(item, 'watched');
+    }
+
+    // Two-way sync with Marvel Order storage
+    try {
+      const stored = localStorage.getItem('phanteress_marvel_watched_v1');
+      const watchedIds: string[] = stored ? JSON.parse(stored) : [];
+
+      let marvelTargetId = (item as any)?.orderItemId || (item as any)?.marvelId || '';
+      if (!marvelTargetId) {
+        const storedItems = localStorage.getItem('phanteress_marvel_items_v1');
+        if (storedItems) {
+          const mList: any[] = JSON.parse(storedItems);
+          const match = mList.find((m) => {
+            const mNorm = norm(m.title);
+            return mNorm === itemTitleNorm || (m.tmdbId && m.tmdbId === item.id);
+          });
+          if (match) marvelTargetId = match.id;
+        }
+      }
+
+      if (willBeWatched) {
+        const targetId = marvelTargetId || `${itemTitleNorm}_${(item.release_date || '').substring(0, 4) || 'title'}`;
+        if (!watchedIds.includes(targetId)) {
+          const next = [...watchedIds, targetId];
+          localStorage.setItem('phanteress_marvel_watched_v1', JSON.stringify(next));
+          window.dispatchEvent(new CustomEvent('phanteress_marvel_order_changed', { detail: { watched: next } }));
+        }
+      } else {
+        const next = watchedIds.filter((wId) => {
+          if (marvelTargetId && wId === marvelTargetId) return false;
+          const wNorm = norm(wId);
+          const wNormNoYear = wNorm.replace(/\d{4}$/, '');
+          const match =
+            wNorm === itemTitleNorm ||
+            wNormNoYear === itemTitleNorm ||
+            (wNormNoYear.length >= 5 && itemTitleNorm.includes(wNormNoYear)) ||
+            (itemTitleNorm.length >= 5 && wNormNoYear.includes(itemTitleNorm));
+          return !match;
+        });
+        localStorage.setItem('phanteress_marvel_watched_v1', JSON.stringify(next));
+        window.dispatchEvent(new CustomEvent('phanteress_marvel_order_changed', { detail: { watched: next } }));
+      }
+    } catch (err) {
+      console.warn('Marvel order sync error in toggleWatched:', err);
     }
   };
 

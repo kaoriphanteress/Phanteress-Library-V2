@@ -12,7 +12,7 @@ interface HeroBannerProps {
 
 export const HeroBanner: React.FC<HeroBannerProps> = ({ items, onSelect, onPlayTrailer }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const { library, addToLibrary, updateStatus } = useLibrary();
+  const { library, toggleWatchlist, toggleWatched } = useLibrary();
 
   if (!items || items.length === 0) return null;
 
@@ -27,18 +27,18 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ items, onSelect, onPlayT
     getImageUrl(currentItem.backdrop_path, 'original') ||
     getImageUrl(currentItem.poster_path, 'w1280');
 
-  const libItem = library.find(
-    (l) => l.tmdbId === currentItem.id && (l.mediaType === mediaType || !l.mediaType)
-  );
-  const isInLibrary = !!libItem;
+  const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const currentTitleNorm = norm(title);
 
-  const handleWatchlistToggle = () => {
-    if (isInLibrary) {
-      updateStatus(libItem.id, libItem.status === 'watchlist' ? 'dropped' : 'watchlist');
-    } else {
-      addToLibrary(currentItem, 'watchlist');
-    }
-  };
+  const libItem = library.find(
+    (l) =>
+      l.tmdbId === currentItem.id ||
+      (l.title && norm(l.title) === currentTitleNorm)
+  );
+
+  const isWatched = libItem?.status === 'watched';
+  const isWatchlist = libItem?.status === 'watchlist';
+  const isWatching = libItem?.status === 'watching';
 
   const nextSlide = () => {
     setCurrentIndex((prev) => (prev + 1) % Math.min(items.length, 5));
@@ -141,24 +141,31 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ items, onSelect, onPlayT
 
             <button
               type="button"
-              onClick={handleWatchlistToggle}
+              onClick={() => toggleWatchlist(currentItem)}
               className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl border text-xs sm:text-sm font-medium transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-                isInLibrary
-                  ? 'bg-zinc-900 border-[#ff2a85] text-white shadow-[0_0_12px_rgba(255,42,133,0.3)]'
+                isWatchlist
+                  ? 'bg-[#ff2a85] text-white border-[#ff2a85] shadow-[0_0_15px_rgba(255,42,133,0.5)]'
+                  : isWatching
+                  ? 'bg-[#ff2a85]/20 text-[#ff2a85] border-[#ff2a85]/50'
                   : 'bg-zinc-900/80 hover:bg-zinc-800 border-zinc-800 hover:border-zinc-700 text-zinc-200'
               }`}
             >
-              {isInLibrary ? (
-                <>
-                  <Check className="w-4 h-4 text-[#ff2a85]" />
-                  <span>In Watchlist</span>
-                </>
-              ) : (
-                <>
-                  <Bookmark className="w-4 h-4 text-[#ff2a85]" />
-                  <span>Add to Watchlist</span>
-                </>
-              )}
+              <Bookmark className="w-4 h-4 text-inherit" />
+              <span>{isWatchlist ? 'In Watchlist' : isWatching ? 'Watching' : 'Watchlist'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => toggleWatched(currentItem)}
+              className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl border text-xs sm:text-sm font-medium transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                isWatched
+                  ? 'bg-emerald-500 text-white border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.5)]'
+                  : 'bg-zinc-900/80 hover:bg-zinc-800 border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white'
+              }`}
+              title={isWatched ? 'Mark as unwatched' : 'Mark as watched'}
+            >
+              <Check className="w-4 h-4 stroke-[2.5]" />
+              <span>{isWatched ? 'Watched' : 'Mark Watched'}</span>
             </button>
 
             <button
