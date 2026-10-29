@@ -18,6 +18,7 @@ import {
 import { TMDBItem, WatchStatus, TMDBSeasonDetail, LibraryItem } from '../types/tmdb';
 import { useLibrary } from '../context/LibraryContext';
 import { getImageUrl, getTVSeasonDetails, searchMulti } from '../services/tmdb';
+import { getShowTotalEpisodes } from '../utils/showMetadata';
 import { OrderTimeline } from './OrderTimeline';
 import {
   getStoredOrderConfig,
@@ -55,7 +56,7 @@ const toTMDBItem = (item: LibraryItem): TMDBItem => ({
   vote_count: 0,
   overview: item.overview || '',
   media_type: item.mediaType,
-  number_of_episodes: item.totalEpisodes,
+  number_of_episodes: getShowTotalEpisodes(item),
   number_of_seasons: item.totalSeasons,
 });
 
@@ -229,9 +230,10 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
   // Compute next episode information & lock status
   const getNextEpisodeInfo = (item: typeof library[0]) => {
     const watchedCount = getShowWatchedCount(item.tmdbId);
-    const totalCount = item.totalEpisodes || 10;
-    const currentSeason = Math.max(1, Math.min(item.totalSeasons || 1, Math.floor(watchedCount / 10) + 1));
-    const nextEpNumber = (watchedCount % 10) + 1;
+    const totalCount = getShowTotalEpisodes(item);
+    const epsPerSeason = Math.max(1, Math.ceil(totalCount / Math.max(1, item.totalSeasons || 1)));
+    const currentSeason = Math.max(1, Math.min(item.totalSeasons || 1, Math.floor(watchedCount / epsPerSeason) + 1));
+    const nextEpNumber = (watchedCount % epsPerSeason) + 1;
     const key = `${item.tmdbId}_${currentSeason}`;
     const season = seasonDetailsCache[key];
     const episode = season?.episodes?.find((e) => e.episode_number === nextEpNumber);
@@ -243,7 +245,7 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
     if (airDateStr) {
       const airTime = new Date(`${airDateStr}T23:59:59`).getTime();
       isUnreleased = airTime > Date.now();
-    } else if (item.title === 'VisionQuest' && nextEpNumber >= 5) {
+    } else if ((item.title === 'VisionQuest' || (item.title || '').toLowerCase().includes('visionquest')) && nextEpNumber >= 5) {
       isUnreleased = true;
       airDateStr = nextEpNumber === 5 || nextEpNumber === 6 ? '2026-10-27' : nextEpNumber === 7 ? '2026-11-03' : '2026-11-10';
       if (nextEpNumber === 5) episodeTitle = 'Firewall';
@@ -302,8 +304,8 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
       } else if (selectedSortOption === 'most_recent') {
         comparison = (b.releaseDate || '').localeCompare(a.releaseDate || '');
       } else if (selectedSortOption === 'episodes_left') {
-        const leftA = (a.totalEpisodes || 10) - getShowWatchedCount(a.tmdbId);
-        const leftB = (b.totalEpisodes || 10) - getShowWatchedCount(b.tmdbId);
+        const leftA = getShowTotalEpisodes(a) - getShowWatchedCount(a.tmdbId);
+        const leftB = getShowTotalEpisodes(b) - getShowWatchedCount(b.tmdbId);
         comparison = leftB - leftA;
       } else if (selectedSortOption === 'random') {
         comparison = 0.5 - Math.random();
@@ -719,7 +721,7 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
 
                 if (item.mediaType === 'tv') {
                   const watchedCount = getShowWatchedCount(item.tmdbId);
-                  const totalCount = item.totalEpisodes || 10;
+                  const totalCount = getShowTotalEpisodes(item);
                   const leftCount = Math.max(0, totalCount - watchedCount);
                   const nextInfo = getNextEpisodeInfo(item);
                   const percent = Math.min(100, Math.round((watchedCount / totalCount) * 100));

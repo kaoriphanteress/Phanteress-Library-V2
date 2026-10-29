@@ -145,5 +145,6 @@ export interface CustomList {
   itemIds: string[]; // array of item IDs
   items?: CustomListItem[]; // cached full items
   createdAt: string;
+  updatedAt?: string;
 }
 

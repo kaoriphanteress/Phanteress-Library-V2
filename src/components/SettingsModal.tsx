@@ -112,7 +112,7 @@ const HoldToResetButton: React.FC<HoldToResetButtonProps> = ({ onReset }) => {
             : isHolding
             ? 'border-[#ff2a85] bg-red-950/40 text-white scale-[0.98] shadow-[0_0_25px_rgba(255,42,133,0.45)]'
             : isResetting
-            ? 'border-amber-500/50 bg-amber-500/10 text-amber-300 animate-pulse'
+            ? 'border-[#ff2a85]/50 bg-[#ff2a85]/10 text-[#ff2a85] animate-pulse'
             : 'border-red-500/30 bg-red-500/10 hover:bg-red-500/15 text-red-400 hover:border-red-500/50'
         }`}
       >
@@ -132,7 +132,7 @@ const HoldToResetButton: React.FC<HoldToResetButtonProps> = ({ onReset }) => {
             {justReset ? (
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
             ) : isResetting ? (
-              <RotateCcw className="w-4 h-4 animate-spin text-amber-300" />
+              <RotateCcw className="w-4 h-4 animate-spin text-[#ff2a85]" />
             ) : isHolding ? (
               <AlertTriangle className="w-4 h-4 text-[#ff2a85] animate-pulse" />
             ) : (

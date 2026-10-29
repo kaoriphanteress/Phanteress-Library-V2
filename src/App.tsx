@@ -346,7 +346,7 @@ function ShowtyDashboard() {
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
+                        <Star className="w-5 h-5 text-[#ff2a85] fill-[#ff2a85]" />
                         <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
                           Top Rated Movies
                         </h2>
@@ -411,7 +411,7 @@ function ShowtyDashboard() {
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
+                        <Star className="w-5 h-5 text-[#ff2a85] fill-[#ff2a85]" />
                         <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
                           Top Rated TV Series
                         </h2>
@@ -496,7 +496,7 @@ function ShowtyDashboard() {
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
+                        <Star className="w-5 h-5 text-[#ff2a85] fill-[#ff2a85]" />
                         <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
                           Top Rated Classics
                         </h2>
@@ -523,6 +523,8 @@ function ShowtyDashboard() {
           <CollectionView
             onSelect={(item) => setSelectedItem(item)}
             onExplore={() => setActiveTab('discover')}
+            onOpenSearch={() => setSearchOpen(true)}
+            onOpenSettings={() => setSettingsOpen(true)}
           />
         )}
 

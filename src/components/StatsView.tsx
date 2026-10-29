@@ -48,9 +48,9 @@ export const StatsView: React.FC = () => {
       value: stats.avgRating > 0 ? `★ ${stats.avgRating}` : '—',
       subtext: `${ratedItems.length} personal scores given`,
       icon: Star,
-      color: 'text-amber-400',
-      bg: 'bg-amber-500/10',
-      border: 'border-amber-500/20',
+      color: 'text-[#ff2a85]',
+      bg: 'bg-[#ff2a85]/10',
+      border: 'border-[#ff2a85]/20',
     },
   ];
 

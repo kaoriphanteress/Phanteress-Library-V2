@@ -16,6 +16,7 @@ import {
 import { LibraryItem, MediaType, TMDBItem, WatchStatus } from '../types/tmdb';
 import { useLibrary } from '../context/LibraryContext';
 import { getImageUrl } from '../services/tmdb';
+import { getShowTotalEpisodes } from '../utils/showMetadata';
 
 interface LibraryViewProps {
   onSelect: (item: TMDBItem) => void;
@@ -87,7 +88,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onSelect, onExplore })
       vote_count: 0,
       overview: '',
       media_type: item.mediaType,
-      number_of_episodes: item.totalEpisodes,
+      number_of_episodes: getShowTotalEpisodes(item),
       number_of_seasons: item.totalSeasons,
     };
     onSelect(tmdbObj);
@@ -224,9 +225,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onSelect, onExplore })
           {filteredItems.map((item) => {
             const year = item.releaseDate ? item.releaseDate.substring(0, 4) : '';
             const poster = getImageUrl(item.posterPath, 'w500');
+            const totalEps = getShowTotalEpisodes(item);
             const progressPercent =
-              item.totalEpisodes && item.totalEpisodes > 0
-                ? Math.min(100, Math.round(((item.watchedEpisodesCount || 0) / item.totalEpisodes) * 100))
+              totalEps > 0
+                ? Math.min(100, Math.round(((item.watchedEpisodesCount || 0) / totalEps) * 100))
                 : 0;
 
             return (
@@ -259,7 +261,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onSelect, onExplore })
                         item.status === 'watched'
                           ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800'
                           : item.status === 'watching'
-                          ? 'bg-amber-950/80 text-amber-300 border-amber-800'
+                          ? 'bg-pink-950/80 text-[#ff2a85] border-[#ff2a85]/50'
                           : 'bg-black/75 text-zinc-300 border-zinc-800'
                       }`}
                     >
@@ -299,7 +301,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onSelect, onExplore })
                       {item.userRating ? (
                         <>
                           <span aria-hidden="true">·</span>
-                          <span className="text-amber-400 font-mono">★ {item.userRating}</span>
+                          <span className="text-[#ff2a85] font-mono">★ {item.userRating}</span>
                         </>
                       ) : (
                         item.voteAverage > 0 && (

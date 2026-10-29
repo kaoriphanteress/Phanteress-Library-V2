@@ -3,6 +3,7 @@ import { PlayCircle, CheckCircle2, Tv, Sparkles, ChevronRight, Check } from 'luc
 import { TMDBItem } from '../types/tmdb';
 import { useLibrary } from '../context/LibraryContext';
 import { getImageUrl } from '../services/tmdb';
+import { getShowTotalEpisodes } from '../utils/showMetadata';
 
 interface NextUpViewProps {
   onSelect: (item: TMDBItem) => void;
@@ -54,7 +55,7 @@ export const NextUpView: React.FC<NextUpViewProps> = ({ onSelect, onExplore }) =
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           {activeShows.map((show) => {
             const watchedCount = getShowWatchedCount(show.tmdbId);
-            const totalCount = show.totalEpisodes || 10;
+            const totalCount = getShowTotalEpisodes(show);
             const isCompleted = watchedCount >= totalCount;
             const nextEp = watchedCount + 1;
             const progressPercent = Math.min(100, Math.round((watchedCount / totalCount) * 100));

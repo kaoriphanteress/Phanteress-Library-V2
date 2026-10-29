@@ -12,6 +12,7 @@ import { db, handleFirestoreError, OperationType } from '../services/firebase';
 import { useAuth } from './AuthContext';
 import { EpisodeProgress, LibraryItem, MediaType, TMDBItem, WatchStatus, CustomList, CustomListItem } from '../types/tmdb';
 import { TMDB_GENRES } from '../services/tmdb';
+import { getShowTotalEpisodes } from '../utils/showMetadata';
 
 interface LibraryContextType {
   library: LibraryItem[];
@@ -60,7 +61,16 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [library, setLibrary] = useState<LibraryItem[]>(() => {
     try {
       const stored = localStorage.getItem(LOCAL_STORAGE_KEY_LIBRARY);
-      return stored ? JSON.parse(stored) : [];
+      const items: LibraryItem[] = stored ? JSON.parse(stored) : [];
+      return items.map((item) => {
+        if (item.mediaType === 'tv') {
+          const accurateCount = getShowTotalEpisodes(item);
+          if (accurateCount !== item.totalEpisodes) {
+            return { ...item, totalEpisodes: accurateCount };
+          }
+        }
+        return item;
+      });
     } catch {
       return [];
     }
@@ -195,7 +205,7 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
       status,
       favorite: false,
       totalSeasons: item.number_of_seasons || 1,
-      totalEpisodes: item.number_of_episodes || 10,
+      totalEpisodes: getShowTotalEpisodes(item),
       watchedEpisodesCount: 0,
       addedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -293,7 +303,7 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
         status: 'dropped',
         favorite: true,
         totalSeasons: item.number_of_seasons || 1,
-        totalEpisodes: item.number_of_episodes || 10,
+        totalEpisodes: getShowTotalEpisodes(item),
         watchedEpisodesCount: 0,
         addedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -581,7 +591,8 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const showLibItem = library.find((i) => i.tmdbId === showId && i.mediaType === 'tv');
     if (showLibItem) {
       const updatedCount = Math.max(0, (showLibItem.watchedEpisodesCount || 0) + (newWatched ? 1 : -1));
-      const autoStatus: WatchStatus = updatedCount > 0 ? (showLibItem.totalEpisodes && updatedCount >= showLibItem.totalEpisodes ? 'watched' : 'watching') : showLibItem.status;
+      const totalEpisodes = getShowTotalEpisodes(showLibItem);
+      const autoStatus: WatchStatus = updatedCount > 0 ? (updatedCount >= totalEpisodes ? 'watched' : 'watching') : showLibItem.status;
       setLibrary((prev) =>
         prev.map((item) =>
           item.id === showLibItem.id

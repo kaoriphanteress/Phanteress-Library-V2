@@ -3,6 +3,7 @@ import { Star, Bookmark, Check, Heart, Film } from 'lucide-react';
 import { TMDBItem } from '../types/tmdb';
 import { getImageUrl } from '../services/tmdb';
 import { useLibrary } from '../context/LibraryContext';
+import { getShowTotalEpisodes } from '../utils/showMetadata';
 
 interface MediaCardProps {
   item: TMDBItem;
@@ -30,7 +31,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({ item, onSelect }) => {
 
   // TV Progress
   const watchedEps = mediaType === 'tv' ? getShowWatchedCount(item.id) : 0;
-  const totalEps = item.number_of_episodes || libItem?.totalEpisodes || 0;
+  const totalEps = getShowTotalEpisodes(item) || libItem?.totalEpisodes || 0;
   const progressPercent = totalEps > 0 ? Math.min(100, Math.round((watchedEps / totalEps) * 100)) : 0;
 
   const handleQuickWatchlist = (e: React.MouseEvent) => {
@@ -171,7 +172,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({ item, onSelect }) => {
           {libItem?.userRating && (
             <>
               <span aria-hidden="true" className="text-zinc-600">·</span>
-              <span className="text-amber-400 font-mono text-[11px]">★ {libItem.userRating}</span>
+              <span className="text-[#ff2a85] font-mono text-[11px]">★ {libItem.userRating}</span>
             </>
           )}
         </div>

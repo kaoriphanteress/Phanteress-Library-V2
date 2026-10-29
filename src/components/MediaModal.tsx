@@ -18,6 +18,7 @@ import {
 import { TMDBItem, TMDBSeasonDetail, WatchStatus } from '../types/tmdb';
 import { getDetails, getImageUrl, getTVSeasonDetails } from '../services/tmdb';
 import { useLibrary } from '../context/LibraryContext';
+import { getShowTotalEpisodes } from '../utils/showMetadata';
 
 // In-memory cache for details to eliminate modal opening lag
 const detailsCache = new Map<string, TMDBItem>();
@@ -344,7 +345,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
 
   // TV Progress
   const watchedEps = mediaType === 'tv' ? getShowWatchedCount(currentData.id) : 0;
-  const totalEps = currentData.number_of_episodes || libItem?.totalEpisodes || seasonDetail?.episodes?.length || 0;
+  const totalEps = getShowTotalEpisodes(currentData) || libItem?.totalEpisodes || seasonDetail?.episodes?.length || 0;
   const progressPercent = totalEps > 0 ? Math.min(100, Math.round((watchedEps / totalEps) * 100)) : 0;
 
   const handleReviewSave = () => {
@@ -692,20 +693,20 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
                     onMouseEnter={() => setHoverRating(star)}
                     onMouseLeave={() => setHoverRating(null)}
                     onClick={() => handleRatingClick(star)}
-                    className="p-1 text-zinc-600 hover:text-amber-400 transition-colors cursor-pointer"
+                    className="p-1 text-zinc-600 hover:text-[#ff2a85] transition-colors cursor-pointer"
                     title={`Rate ${star}/10`}
                   >
                     <Star
                       className={`w-4 h-4 ${
                         star <= (hoverRating ?? userRating)
-                          ? 'text-amber-400 fill-amber-400'
+                          ? 'text-[#ff2a85] fill-[#ff2a85]'
                           : 'text-zinc-700'
                       }`}
                     />
                   </button>
                 ))}
                 {userRating > 0 && (
-                  <span className="text-xs font-bold text-amber-400 ml-1 font-mono">
+                  <span className="text-xs font-bold text-[#ff2a85] ml-1 font-mono">
                     {userRating}/10
                   </span>
                 )}
@@ -820,7 +821,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({ item, onClose, onSelectR
                         <span
                           className={`text-[10px] px-2 py-0.5 rounded font-mono shrink-0 ${
                             isUnreleased
-                              ? 'text-amber-400/80 bg-amber-400/10'
+                              ? 'text-zinc-400 bg-zinc-850 border border-zinc-800'
                               : watched
                               ? 'text-[#ff2a85] bg-[#ff2a85]/10'
                               : 'text-zinc-600'

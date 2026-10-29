@@ -1217,7 +1217,7 @@ export const MCU_RELEASE_ITEMS: MarvelItem[] = [
     "mediaType": "tv",
     "phase": "Phase 6",
     "hero": "Vision",
-    "runtime": "Series"
+    "runtime": "8 Episodes"
   },
   {
     "id": "avengers_doomsday_2026",
@@ -2400,7 +2400,7 @@ export const MCU_STORY_ITEMS: MarvelItem[] = [
     "mediaType": "tv",
     "phase": "Phase 6",
     "hero": "Vision",
-    "runtime": "Series"
+    "runtime": "8 Episodes"
   },
   {
     "id": "avengers_doomsday_2026",
@@ -5193,7 +5193,7 @@ export const ALL_MARVEL_RELEASE_ITEMS: MarvelItem[] = [
     "mediaType": "tv",
     "phase": "8. MCU Phase 6 & Upcoming Horizons (2026\u20132028 and Beyond)",
     "hero": "Vision",
-    "runtime": "Series"
+    "runtime": "8 Episodes"
   },
   {
     "id": "avengers_doomsday_2026",

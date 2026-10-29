@@ -568,7 +568,7 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                     <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
                       Release Order
                     </h3>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#ff2a85]/20 text-[#ff2a85] border border-[#ff2a85]/40">
                       The Theatrical Experience
                     </span>
                   </div>
